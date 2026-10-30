@@ -8,38 +8,38 @@ The main thesis pipeline is **32-beamline images → HEVC structural priors → 
 
 ## Complete Workflow
 
-Solid arrows indicate the main processing steps and data dependencies; dashed arrows indicate optional comparisons or auxiliary evaluation inputs. Stage names match the `run.py` subcommands. Training, inference, and evaluation are connected through manifests, weights, and output directories, and must be run separately. Stage numbers match the steps below. Border colors distinguish stages, while text and backgrounds follow the display theme.
+Solid arrows indicate the main processing steps and data dependencies; dashed arrows indicate optional comparisons or auxiliary evaluation inputs. Subcommands labeled in the diagram are executed through `run.py`; see the [subcommand reference](#cli-commands) for their purposes, inputs, and outputs. Training, inference, and evaluation are connected through manifests, weights, and output directories, and must be run separately. Stage numbers match the steps below. Border colors distinguish stages, while text and backgrounds follow the display theme.
 
 ```mermaid
 flowchart TD
     %% Keep stage titles in regular nodes so cross-stage edges do not cross subgraph titles or borders.
-    RF["RF channel data<br/>and acquisition parameters"] --> BF["<b>1. RF imaging - optional</b><br/>beamform<br/>Delay-and-sum, envelope, scan conversion"]
+    RF["RF channel data<br/>and acquisition parameters"] --> BF["<b>1. RF imaging - optional</b><br/>Subcommand: beamform<br/>Delay-and-sum, envelope, scan conversion"]
     BF --> BM["32-beamline/128-beamline B-mode images"]
     Existing["Existing B-mode images"] --> BM
-    BM --> Prep["<b>1. Image preprocessing</b><br/>prepare<br/>Grayscale validation, cropping, resizing"]
+    BM --> Prep["<b>1. Image preprocessing</b><br/>Subcommand: prepare<br/>Grayscale validation, cropping, resizing"]
     Prep --> Low["Original 32-beamline TIFF"]
     Prep --> High["Original 128-beamline TIFF"]
     Prep --> PGM["PGM with identical pixels"]
 
-    PGM --> HEVC["<b>2. HEVC structural prior extraction</b><br/>prior<br/>Encode low-beamline-count images"]
+    PGM --> HEVC["<b>2. HEVC structural prior extraction</b><br/>Subcommand: prior<br/>Encode low-beamline-count images"]
     HEVC --> Stream["HEVC bitstream"]
     HEVC --> Blocks["TU/PU partition arrays"]
     Blocks --> Maps["<b>3. Pixel-wise block-size maps</b><br/>TU interpolation, PU grayscale adjustment<br/>Smoothing and discrete clustering"]
     Low --> Maps
-    Maps --> KSVD["<b>3. Adaptive compressed sensing<br/>denoising</b><br/>denoise: Block K-SVD<br/>Dictionary learning, sparse coding, weighted fusion"]
+    Maps --> KSVD["<b>3. Adaptive compressed sensing<br/>denoising</b><br/>Subcommand: denoise (Block K-SVD)<br/>Dictionary learning, sparse coding, weighted fusion"]
     Low --> KSVD
     KSVD --> Denoised["Denoised TIFF<br/>Continuous/discrete scale maps and timing"]
 
-    Low -->|train/val| Pairs["pairs.csv<br/>Original image pairs split by source"]
-    High -->|train/val| Pairs
-    Pairs --> Train["<b>4. USR-Mamba training</b><br/>train<br/>Training augmentation, adversarial training, validation"]
+    Low -->|train/val splits| Pairs["pairs.csv<br/>Original image pairs split by source"]
+    High -->|train/val splits| Pairs
+    Pairs --> Train["<b>4. USR-Mamba training</b><br/>Subcommand: train<br/>Training augmentation, adversarial training, validation"]
     Train --> Weights["USR-Mamba weights<br/>Parameters and loss records"]
-    Denoised -->|Test images from cascade profile| Infer["<b>5. State space super-resolution<br/>enhancement</b><br/>infer: USR-Mamba<br/>Load weights and reconstruct 32-beamline images"]
+    Denoised -->|Test images from cascade profile| Infer["<b>5. State space super-resolution<br/>enhancement</b><br/>Subcommand: infer (USR-Mamba)<br/>Load weights and reconstruct 32-beamline images"]
     Weights --> Infer
     Infer --> Enhanced["Enhanced TIFF<br/>Original dimensions and relative directories"]
 
-    Low -.-> Fixed["<b>3. Fixed-block comparisons</b><br/>fixed<br/>Reconstruct each fixed scale separately"]
-    Fixed -.-> Eval["<b>6. Quantitative evaluation</b><br/>evaluate<br/>Compute metrics from evaluation.csv"]
+    Low -.-> Fixed["<b>3. Fixed-block comparisons</b><br/>Subcommand: fixed<br/>Reconstruct each fixed scale separately"]
+    Fixed -.-> Eval["<b>6. Quantitative evaluation</b><br/>Subcommand: evaluate<br/>Compute metrics from evaluation.csv"]
     Low -.->|Original-image baseline| Eval
     Denoised -.->|Denoising comparison / continuous scale maps| Eval
     Blocks -.->|TU arrays| Eval
@@ -62,18 +62,26 @@ flowchart TD
     class Annotations,Eval,Reports metrics;
 ```
 
-Block K-SVD provides two profiles: `cascade` uses block sizes 4, 8, and 12 before USR-Mamba; `denoising` uses six sizes, 4, 8, 12, 16, 20, and 24, for standalone denoising experiments. Profile names select block sizes; output directories are specified separately. In the complete workflow, the `denoise` command runs with the selected profile, while the `fixed` command generates a separate comparison result for each fixed block size.
+Block K-SVD provides two profiles: `cascade` uses block sizes 4, 8, and 12 before USR-Mamba; `denoising` uses six sizes, 4, 8, 12, 16, 20, and 24, for standalone denoising experiments. Profile names select block sizes; output directories are specified separately. In the complete workflow, the `denoise` subcommand runs with the selected profile, while the `fixed` subcommand generates a separate comparison result for each fixed block size.
 
-## Stages and Code Entry Points
+<a id="cli-commands"></a>
 
-| Stage | Directory | Inputs and outputs |
-| --- | --- | --- |
-| 1. Imaging and preprocessing | `imaging/` | `beamform` (optional), `prepare`: RF or B-mode images → aligned grayscale TIFF/PGM |
-| 2. Structural prior extraction | `hevc_prior/` | `prior`: PGM → HEVC bitstreams and numerical TU/PU arrays |
-| 3. Adaptive compressed sensing denoising | `block_ksvd/` | `denoise` / `fixed`: images and priors → denoised images, scale maps, and timing |
-| 4. Network training | `usr_mamba/` | `train`: original image pairs with low/high beamline counts and manifest → weights and training/validation records |
-| 5. State space super-resolution enhancement | `usr_mamba/` | `infer`: denoised low-beamline-count images and weights → super-resolution reconstructions |
-| 6. Metric computation | `evaluation/` | `evaluate`: registered images, scale maps, and annotations → per-image and group metrics |
+## Subcommands, Stages, and Code Entry Points
+
+The eight names below are command-line subcommands of `run.py`. Each invocation selects one task, and the entry point dispatches it to the corresponding Python, MATLAB, or HEVC encoder implementation. Stage numbers match the workflow and processing steps below.
+
+| Stage | Subcommand and purpose | Implementation directory | Main inputs → main outputs |
+| --- | --- | --- | --- |
+| 1 | `beamform`: RF beamforming (optional) | `imaging/` | RF channel-data MAT files and acquisition parameters → B-mode grayscale TIFF |
+| 1 | `prepare`: image preprocessing | `imaging/` | Single-frame 8-bit grayscale TIFF → cropped and resized grayscale TIFF and PGM with identical pixels |
+| 2 | `prior`: HEVC structural prior extraction | `hevc_prior/` | PGM → HEVC bitstreams and TU/PU partition arrays |
+| 3 | `denoise`: adaptive block K-SVD denoising | `block_ksvd/` | Grayscale TIFF, TU/PU priors, and a block-size profile → denoised TIFF, continuous/discrete scale maps, and timing |
+| 3 | `fixed`: fixed-block-size denoising comparisons | `block_ksvd/` | Grayscale TIFF and a block-size profile → denoised TIFF for each fixed size and timing |
+| 4 | `train`: USR-Mamba training and independent validation | `usr_mamba/` | Original low/high-beamline image pairs and training/validation manifest → model weights, parameters, and loss records |
+| 5 | `infer`: image enhancement with a trained network | `usr_mamba/` | Grayscale TIFF and model weights → enhanced TIFF with unchanged pixel dimensions |
+| 6 | `evaluate`: metric computation and group statistics | `evaluation/` | Reference images, result images, and optional scale maps and annotations specified by the evaluation manifest → per-image metrics and group means |
+
+`denoise` estimates scale maps from TU/PU priors and selects block sizes adaptively; `fixed` denoises separately at each configured block size to produce fixed-block comparisons.
 
 `run.py` is the unified entry point, and `configs/paper.json` defines the experiment parameters. Data locations, output locations, MATLAB, the encoder, and the computing device are supplied through command-line arguments. `common/` handles configuration, input conventions, and MATLAB invocation.
 
@@ -131,7 +139,7 @@ The following sections organize all **39 numbered equations** from Chapters 2–
 
 ### 1. RF Imaging and Image Preprocessing
 
-Input can be a MAT file containing channel signals and physical acquisition parameters, or an existing single-frame 8-bit grayscale TIFF. RF input first passes through `beamform` to produce B-mode TIFF; existing images enter `prepare` directly. Image pairs with low/high beamline counts must be registered and use the same preprocessing. The data provider must split sources into training, validation, and test sets in advance.
+Input can be a MAT file containing channel signals and physical acquisition parameters, or an existing single-frame 8-bit grayscale TIFF. The `beamform` subcommand beamforms RF input into B-mode TIFF; existing images go directly to the `prepare` subcommand for preprocessing. Image pairs with low/high beamline counts must be registered and use the same preprocessing. The data provider must split sources into training, validation, and test sets in advance.
 
 ```mermaid
 flowchart TD
@@ -154,7 +162,7 @@ Implementation: [RF imaging](imaging/beamform_rf.m), [preprocessing](imaging/pre
 
 ### 2. Structural Prior Extraction from HEVC Block Partitions
 
-`prior` performs intra coding on PGM images, using image structure to determine prediction unit (PU) and transform unit (TU) partitions. The thesis restricts intra-prediction modes, reformulates the rate-distortion cost, and adapts the quantization zeroing threshold to obtain finer partitions around tissue boundaries, bright targets, and high-frequency textures. Subsequent denoising reads these structural prior arrays; image pixels come from the preprocessed TIFF.
+The `prior` subcommand performs intra coding on PGM images, using image structure to determine prediction unit (PU) and transform unit (TU) partitions. The thesis restricts intra-prediction modes, reformulates the rate-distortion cost, and adapts the quantization zeroing threshold to obtain finer partitions around tissue boundaries, bright targets, and high-frequency textures. Subsequent denoising reads these structural prior arrays; image pixels come from the preprocessed TIFF.
 
 ```mermaid
 flowchart TD
@@ -289,7 +297,7 @@ Implementation: [prior extraction entry point](hevc_prior/runner.py), [encoder](
 
 ### 3. Adaptive Compressed Sensing Denoising with Block K-SVD
 
-Block K-SVD is the thesis's structural-prior-guided adaptive block K-SVD denoising method. `denoise` combines the image, TU, and PU to construct a pixel-wise block-size map (called a scale map below), using TU-center interpolation, PU grayscale adjustment, smoothing, and discrete clustering. It then performs dictionary learning and sparse reconstruction for each active scale, followed by Gaussian-weighted fusion. Dictionary-training images are formed by adding synthetic impulse/Gaussian noise to the current input; final sparse reconstruction uses patches from the current input image.
+Block K-SVD is the thesis's structural-prior-guided adaptive block K-SVD denoising method. The `denoise` subcommand combines the image, TU, and PU to construct a pixel-wise block-size map (called a scale map below), using TU-center interpolation, PU grayscale adjustment, smoothing, and discrete clustering. It then performs dictionary learning and sparse reconstruction for each active scale, followed by Gaussian-weighted fusion. Dictionary-training images are formed by adding synthetic impulse/Gaussian noise to the current input; final sparse reconstruction uses patches from the current input image.
 
 ```mermaid
 flowchart TD
@@ -325,7 +333,7 @@ Scale interpolation falls back to nearest neighbors when centers are insufficien
 | `cascade` | 4, 8, 12 | Denoising before USR-Mamba inference |
 | `denoising` | 4, 8, 12, 16, 20, 24 | Standalone denoising and fixed-block comparisons |
 
-The `fixed` command skips TU/PU scale estimation, learns and reconstructs each configured fixed block size separately, and fuses overlapping patches with equal weights. All fixed scales for the same image share the same synthetic training noise. Results are written to directories such as `images/fixed_04/`.
+The `fixed` subcommand skips TU/PU scale estimation, learns and reconstructs each configured fixed block size separately, and fuses overlapping patches with equal weights. All fixed scales for the same image share the same synthetic training noise. Results are written to directories such as `images/fixed_04/`.
 
 <a id="paper-ksvd-equations"></a>
 
@@ -445,12 +453,12 @@ Implementation: [batch denoising](block_ksvd/batch_denoise.m), [scale maps](bloc
 
 ### 4. Paired USR-Mamba Training and Independent Validation
 
-`train` reads `pairs.csv`, using preprocessed original 32-beamline images as inputs and original 128-beamline images as references. The manifest contains `source_id,split,input,reference`, where `split` is `train`, `val`, or `test`. The training entry point uses only the first two splits and checks source and file separation.
+The `train` subcommand reads `pairs.csv`, using preprocessed original 32-beamline images as inputs and original 128-beamline images as references. The manifest contains `source_id,split,input,reference`, where `split` is `train`, `val`, or `test`. The training entry point uses only the first two splits and checks source and file separation.
 
 ```mermaid
 flowchart TD
     Manifest["pairs.csv<br/>Original TIFF pairs with low/high beamline counts"] --> Check["Validate sources, paths, dimensions<br/>and dataset splits"]
-    Check --> Train["train: four paired crops<br/>Restore size with Lanczos<br/>Horizontal flips"]
+    Check --> Train["Training split: train<br/>Four paired crops<br/>Restore size with Lanczos<br/>Horizontal flips"]
     Train --> Normalize["Map grayscale to −1 through 1"]
     Normalize --> Generator["USR-Mamba generates enhanced images"]
     Generator --> L1["L1 loss against paired 128-beamline reference"]
@@ -459,7 +467,7 @@ flowchart TD
     Discriminator --> Adversarial["Least-squares adversarial loss"]
     L1 --> Update["Weighted losses and Adam<br/>Alternate generator/discriminator updates"]
     Adversarial --> Update
-    Check --> Validation["val: full image pairs<br/>No crops or flips, grayscale normalization"]
+    Check --> Validation["Validation split: val<br/>Full image pairs<br/>No crops or flips, grayscale normalization"]
     Update --> Validate["Evaluation mode after each epoch<br/>Validation L1 without gradients"]
     Validation --> Validate
     Validate --> Logs["losses.csv<br/>Training L1, validation L1, learning rate"]
@@ -503,7 +511,7 @@ Implementation: [paired data and splits](usr_mamba/dataset.py), [training and va
 
 ### 5. State Space Super-Resolution Enhancement with USR-Mamba
 
-USR-Mamba is the thesis's super-resolution network for medical ultrasound B-mode images. It combines spatial-frequency dual-domain state space modeling, residual convolution, and angular-uniform scanning in an encoder–high-resolution bottleneck–decoder architecture. `infer` loads the specified weights and their recorded model architecture to reconstruct the 32-beamline images denoised with the `cascade` profile. The following diagram shows the default full model; `H×W` denotes input height and width. The scan-order implementation is detailed after Eq. (4-6).
+USR-Mamba is the thesis's super-resolution network for medical ultrasound B-mode images. It combines spatial-frequency dual-domain state space modeling, residual convolution, and angular-uniform scanning in an encoder–high-resolution bottleneck–decoder architecture. The `infer` subcommand loads the specified weights and their recorded model architecture to reconstruct the 32-beamline images denoised with the `cascade` profile. The following diagram shows the default full model; `H×W` denotes input height and width. The scan-order implementation is detailed after Eq. (4-6).
 
 ```mermaid
 flowchart TD
@@ -626,7 +634,7 @@ Metric names follow the final thesis. The two CNR definitions are reported separ
 | FWHM | Full Width at Half Maximum | 半高全宽 | `fwhm_x` / `fwhm_y` |
 | LPIPS | Learned Perceptual Image Patch Similarity | 学习感知图像块相似度 | `lpips` |
 
-`evaluate` reads `evaluation.csv`. Each row specifies a reference image, a method result, and optional continuous scale map, ROI, TU, and mask inputs. Results and references must share the same pixel coordinates. Separate manifests can compare original inputs, fixed-block denoising, adaptive denoising, and network-enhanced results.
+The `evaluate` subcommand reads `evaluation.csv`. Each row specifies a reference image, a method result, and optional continuous scale map, ROI, TU, and mask inputs. Results and references must share the same pixel coordinates. Separate manifests can compare original inputs, fixed-block denoising, adaptive denoising, and network-enhanced results.
 
 ```mermaid
 flowchart TD
@@ -751,7 +759,7 @@ Implementation: [evaluation entry point](evaluation/runner.py), [MATLAB batch me
 
 ## Running and Reproducing Experiments
 
-Prepare images with `beamform` (optional), `prepare`, `prior`, and `denoise` in sequence. Run `train` to obtain weights, then `infer`, and finally `evaluate` to summarize results. Compatible existing weights allow direct inference. The `fixed` command and the network variants provide separate comparisons. Input manifests, annotations, and data splits must be prepared in advance.
+Prepare images with `beamform` (optional), `prepare`, `prior`, and `denoise` in sequence. Run `train` to obtain weights, then `infer`, and finally `evaluate` to summarize results. Compatible existing weights allow direct inference. The `fixed` subcommand and the network variants provide separate comparisons. Input manifests, annotations, and data splits must be prepared in advance.
 
 See the [reproduction guide](docs/reproduction.md) for environment setup, encoder builds, and stage commands; the [data contract](docs/data_contract.md) for input and manifest formats; and the [validation record](docs/validation.md) for completed synthetic checks and the scope of actual testing.
 

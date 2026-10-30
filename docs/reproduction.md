@@ -1,5 +1,7 @@
 # 复现指南
 
+本指南通过 `run.py` 的八个命令行子命令执行各阶段任务，用途和输入输出见[子命令说明](../README_zh-CN.md#cli-commands)。每次调用执行一个阶段；下方各节标题同时标明处理任务与对应子命令。
+
 ## 环境
 
 需要 Python 3.10+、C99 编译器、MATLAB，以及适配 CUDA 的 PyTorch、Mamba 扩展。MATLAB 使用 Image Processing 和 Signal Processing 工具箱。成像、尺度图、字典学习、重建和传统指标在 MATLAB 中运行；预处理、模型与训练在 Python 中运行。
@@ -40,11 +42,11 @@ work/
   pairs.csv
 ```
 
-`pairs.csv` 表头为 `source_id,split,input,reference`。路径相对于训练时的 `--data-root`，例如预处理后使用 `images/low/sample_000001.tif`。每个来源只能出现一次，分为 `train`、`val`、`test`；训练与验证来源、文件均不重叠。来源是否相同应由数据提供者确认。
+`pairs.csv` 表头为 `source_id,split,input,reference`。路径相对于训练时的 `--data-root`，例如预处理后使用 `images/low/sample_000001.tif`。每个来源只能出现一次，分为 `train`、`val`、`test`；训练与验证来源、文件均不重叠。来源是否相同应由数据提供者确认。清单 `split` 列中的 `train` 表示训练集；模型训练由 `run.py` 的 `train` 子命令执行。
 
 论文记录 400 对候选、排除 20 对测试同源图像后保留 380 对训练来源、40 对验证图像和 20 张测试图像。严格复现须取得与这些数量对应的权威来源划分；本程序不为凑齐数量而将验证来源并入训练。
 
-## 2. 可选 RF 成像
+## 2. RF 波束合成：`beamform`（可选）
 
 已有 B 模式图像时跳过。MAT 文件需按数据契约提供中性的 `acquisition` 结构，包含实际频率、采样率、延迟和通道数组。
 
@@ -55,7 +57,7 @@ python -B run.py --config $Config beamform --input work/rf/high --output work/ra
 
 流程为扫描线平移窗加权、传播延迟取样、通道求和、Hilbert 包络、对数压缩和双线性扫描转换。声速、阵元数、孔径系数、延迟偏移、显示高度与动态范围在 `imaging.rf` 中配置。输入的物理量均使用 Hz、米、秒对应的 SI 单位；`transmit_delay_cycles` 为发射周期数。
 
-## 3. 图像预处理
+## 3. 图像预处理：`prepare`
 
 ```powershell
 python -B run.py --config $Config prepare --input work/raw_images --output work/prepared
@@ -65,7 +67,7 @@ python -B run.py --config $Config prepare --input work/raw_images --output work/
 
 预处理只接受单帧 8 位灰度 TIFF。输入尺寸和裁剪范围须匹配配置；程序不会猜测 16 位或浮点图像的强度映射。HEVC 输入宽高为 32 的倍数。
 
-## 4. HEVC 结构先验
+## 4. HEVC 结构先验提取：`prior`
 
 ```powershell
 python -B run.py --config $Config prior --input work/prepared/pgm --output work/priors --encoder $Encoder
@@ -75,7 +77,7 @@ python -B run.py --config $Config prior --input work/prepared/pgm --output work/
 
 每个样本输出 `sample_000001.hevc`、`sample_000001_tu.csv`、`sample_000001_pu.csv`，相对目录与图像一致。CSV 为 `[block_size,x,y]`，坐标为左上角起算的 0-based 像素。数值数组不包含可执行代码。位流语法、变换和熵编码表属于编码器常量；研究用搜索权重通过配置传入。
 
-## 5. Block K-SVD
+## 5. Block K-SVD 去噪：`denoise` 与 `fixed`
 
 独立去噪采用六种尺寸，网络前级采用三种尺寸。配置名用于选择块尺寸，输出目录由命令行单独指定：
 
@@ -96,7 +98,7 @@ python -B run.py --config $Config denoise --images work/prepared/images --priors
 
 输出图像位于 `images/`，连续和离散尺度图位于 `scale_maps/`，每幅图耗时写入 `timing.csv`。固定块对照位于 `images/fixed_04/` 等目录。输入文件树可只包含待测试的低线数图像，无需对未使用图像进行处理。
 
-## 6. USR-Mamba 训练与结构消融
+## 6. USR-Mamba 训练与结构消融：`train`
 
 ```powershell
 python -B run.py --config $Config train --manifest work/pairs.csv --data-root work/prepared --output work/models/full --variant full --device $Device
@@ -120,7 +122,7 @@ python -B run.py --config $Config train --manifest work/pairs.csv --data-root wo
 
 保持清单与训练设置相同，为各变体分别指定结果目录。批量与线程可按设备资源修改；改变实验参数后应保存并报告实际配置。
 
-## 7. 低线数图像推理
+## 7. 低线数图像推理：`infer`
 
 ```powershell
 python -B run.py --config $Config infer --input work/cascade/images/low --output work/enhanced --checkpoint work/models/full/usr_mamba_060.pt --device $Device
@@ -128,7 +130,7 @@ python -B run.py --config $Config infer --input work/cascade/images/low --output
 
 论文主路径使用前级去噪后的 32 线图像，参考为原生 128 线图像。原始 32 线对照可另指定输入和输出执行。图像的中性文件名、相对目录和尺寸保持一致。模型结构从所选权重读取，严格核验参数形状。
 
-## 8. 评价与分组统计
+## 8. 指标评价与分组统计：`evaluate`
 
 提供 `evaluation.csv`，列为 `sample_id,group,reference,result,scale_map,rois,tu,mask`。路径相对 `--data-root`；可选标注留空时，对应指标为空，不自动编造 ROI。每一类方法可分别执行，或在不同清单中比较。
 

@@ -64,8 +64,8 @@
     },
     {
       "path": "docs/reproduction.md",
-      "bytes": 11674,
-      "sha256": "0ecd08134d7ea79edc8db3598fa237cc16bebf1b348ab189836085d8d685d69b"
+      "bytes": 12153,
+      "sha256": "a6a496c22f375ed5278ef5a0e9d6198fd216abe560803cecb983533c21908507"
     },
     {
       "path": "docs/validation.md",
@@ -149,13 +149,13 @@
     },
     {
       "path": "README.md",
-      "bytes": 51674,
-      "sha256": "38759adf38fccbdcb4f28a7ff608f1a36de13f3a3f3d593186ae2e058d458818"
+      "bytes": 53106,
+      "sha256": "f2a1c616b966b4fa653edc4371f6877312ed198b5285d7649262ebc479278688"
     },
     {
       "path": "README_zh-CN.md",
-      "bytes": 45090,
-      "sha256": "a011192713cb170e4c1268042e64fbf6410d840f25dade5df282ba2ef9540c21"
+      "bytes": 46329,
+      "sha256": "a48aa8b2de70c2c1ec53262e08bf6c174cd4af37b7de09bf58009e4bc1036664"
     },
     {
       "path": "requirements-perceptual.txt",

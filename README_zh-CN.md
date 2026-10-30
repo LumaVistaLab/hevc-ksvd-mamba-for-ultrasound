@@ -10,38 +10,38 @@
 
 ## 完整流程图
 
-实线表示主要处理和数据依赖，虚线表示可选对照或辅助评价输入。图中的阶段名与 `run.py` 子命令对应；训练、推理和评价通过清单、权重及输出目录衔接，需要分别执行。阶段编号与下方分步说明一致，以边框颜色区分阶段，文字和底色跟随显示主题。
+实线表示主要处理和数据依赖，虚线表示可选对照或辅助评价输入。图中标注的子命令由 `run.py` 执行，用途和输入输出见[子命令说明](#cli-commands)；训练、推理和评价通过清单、权重及输出目录衔接，需要分别执行。阶段编号与下方分步说明一致，以边框颜色区分阶段，文字和底色跟随显示主题。
 
 ```mermaid
 flowchart TD
     %% 阶段标题放在普通节点中，避免跨子图连线穿过分组标题与边界。
-    RF["RF 通道数据<br/>与采集参数"] --> BF["<b>1. RF 成像（可选）</b><br/>beamform<br/>延迟求和、包络与扫描转换"]
+    RF["RF 通道数据<br/>与采集参数"] --> BF["<b>1. RF 成像（可选）</b><br/>子命令：beamform<br/>延迟求和、包络与扫描转换"]
     BF --> BM["32 线 / 128 线 B 模式图像"]
     Existing["已有 B 模式图像"] --> BM
-    BM --> Prep["<b>1. 图像预处理</b><br/>prepare<br/>灰度校验、裁剪与缩放"]
+    BM --> Prep["<b>1. 图像预处理</b><br/>子命令：prepare<br/>灰度校验、裁剪与缩放"]
     Prep --> Low["原始 32 线 TIFF"]
     Prep --> High["原始 128 线 TIFF"]
     Prep --> PGM["同像素 PGM"]
 
-    PGM --> HEVC["<b>2. HEVC 结构先验提取</b><br/>prior<br/>对待处理低波束线数图像编码"]
+    PGM --> HEVC["<b>2. HEVC 结构先验提取</b><br/>子命令：prior<br/>对待处理低波束线数图像编码"]
     HEVC --> Stream["HEVC 码流"]
     HEVC --> Blocks["TU/PU 块划分数组"]
     Blocks --> Maps["<b>3. 像素级块大小图</b><br/>TU 插值与 PU 灰度调节<br/>平滑滤波与离散聚类"]
     Low --> Maps
-    Maps --> KSVD["<b>3. 自适应压缩感知去噪</b><br/>denoise：Block K-SVD<br/>字典学习、稀疏编码与加权融合"]
+    Maps --> KSVD["<b>3. 自适应压缩感知去噪</b><br/>子命令：denoise (Block K-SVD)<br/>字典学习、稀疏编码与加权融合"]
     Low --> KSVD
     KSVD --> Denoised["去噪 TIFF<br/>连续/离散尺度图与耗时"]
 
-    Low -->|train/val| Pairs["pairs.csv<br/>按来源划分的原始配对图像"]
-    High -->|train/val| Pairs
-    Pairs --> Train["<b>4. USR-Mamba 训练</b><br/>train<br/>训练集增强、对抗训练与验证"]
+    Low -->|训练集/验证集| Pairs["pairs.csv<br/>按来源划分的原始配对图像"]
+    High -->|训练集/验证集| Pairs
+    Pairs --> Train["<b>4. USR-Mamba 训练</b><br/>子命令：train<br/>训练集增强、对抗训练与验证"]
     Train --> Weights["USR-Mamba 权重<br/>参数与损失记录"]
-    Denoised -->|cascade 配置下的测试图像| Infer["<b>5. 状态空间超分辨率增强</b><br/>infer：USR-Mamba<br/>加载权重并重建 32 线图像"]
+    Denoised -->|cascade 配置下的测试图像| Infer["<b>5. 状态空间超分辨率增强</b><br/>子命令：infer (USR-Mamba)<br/>加载权重并重建 32 线图像"]
     Weights --> Infer
     Infer --> Enhanced["增强 TIFF<br/>保持输入尺寸与相对目录"]
 
-    Low -.-> Fixed["<b>3. 固定块对照</b><br/>fixed<br/>各固定尺度独立重建"]
-    Fixed -.-> Eval["<b>6. 定量评价</b><br/>evaluate<br/>依据 evaluation.csv 计算指标"]
+    Low -.-> Fixed["<b>3. 固定块对照</b><br/>子命令：fixed<br/>各固定尺度独立重建"]
+    Fixed -.-> Eval["<b>6. 定量评价</b><br/>子命令：evaluate<br/>依据 evaluation.csv 计算指标"]
     Low -.->|原始图像对照| Eval
     Denoised -.->|去噪对照/连续尺度图| Eval
     Blocks -.->|TU 数组| Eval
@@ -64,18 +64,26 @@ flowchart TD
     class Annotations,Eval,Reports metrics;
 ```
 
-Block K-SVD 提供两组配置：`cascade` 使用 4、8、12 三种块尺寸，作为 USR-Mamba 前级；`denoising` 使用 4、8、12、16、20、24 六种块尺寸，用于独立去噪实验。配置名用于选择块尺寸，输出目录由命令行单独指定。完整图中的 `denoise` 命令按所选配置分别运行，`fixed` 命令为各固定块尺寸生成独立对照结果。
+Block K-SVD 提供两组配置：`cascade` 使用 4、8、12 三种块尺寸，作为 USR-Mamba 前级；`denoising` 使用 4、8、12、16、20、24 六种块尺寸，用于独立去噪实验。配置名用于选择块尺寸，输出目录由命令行单独指定。完整图中的 `denoise` 子命令按所选配置分别运行，`fixed` 子命令为各固定块尺寸生成独立对照结果。
 
-## 阶段与代码入口
+<a id="cli-commands"></a>
 
-| 阶段 | 目录 | 输入与输出 |
-| --- | --- | --- |
-| 1. 成像与预处理 | `imaging/` | `beamform`（可选）、`prepare`：RF 或 B 模式图像 → 对齐的灰度 TIFF/PGM |
-| 2. 结构先验提取 | `hevc_prior/` | `prior`：PGM → HEVC 码流、TU/PU 数值数组 |
-| 3. 自适应压缩感知去噪 | `block_ksvd/` | `denoise` / `fixed`：图像及先验 → 去噪图像、尺度图与耗时 |
-| 4. 网络训练 | `usr_mamba/` | `train`：原始低/高波束线数配对图像及清单 → 权重与训练/验证记录 |
-| 5. 状态空间超分辨率增强 | `usr_mamba/` | `infer`：去噪低波束线数图像及权重 → 超分辨率重建图像 |
-| 6. 指标计算 | `evaluation/` | `evaluate`：配准图像、尺度图及标注 → 单图与分组指标 |
+## 子命令、处理阶段与代码入口
+
+下面八个名称都是 `run.py` 的命令行子命令。每次调用选择一项处理任务，由入口程序调用相应的 Python、MATLAB 或 HEVC 编码器实现。表中阶段编号与流程图及下方分步说明一致。
+
+| 阶段 | 子命令与用途 | 实现目录 | 主要输入 → 主要输出 |
+| --- | --- | --- | --- |
+| 1 | `beamform`：RF 波束合成（可选） | `imaging/` | RF 通道数据 MAT 与采集参数 → B 模式灰度 TIFF |
+| 1 | `prepare`：图像预处理 | `imaging/` | 单帧 8 位灰度 TIFF → 裁剪、缩放后的灰度 TIFF 及同像素 PGM |
+| 2 | `prior`：HEVC 结构先验提取 | `hevc_prior/` | PGM → HEVC 码流及 TU/PU 块划分数组 |
+| 3 | `denoise`：自适应分块 K-SVD 去噪 | `block_ksvd/` | 灰度 TIFF、TU/PU 先验及块尺寸配置 → 去噪 TIFF、连续/离散尺度图与耗时 |
+| 3 | `fixed`：固定块尺寸去噪对照 | `block_ksvd/` | 灰度 TIFF 及块尺寸配置 → 每种固定尺寸的去噪 TIFF 与耗时 |
+| 4 | `train`：USR-Mamba 训练与独立验证 | `usr_mamba/` | 原始低/高波束线数配对图像及训练/验证清单 → 模型权重、参数与损失记录 |
+| 5 | `infer`：使用已训练网络增强图像 | `usr_mamba/` | 灰度 TIFF 及模型权重 → 增强 TIFF，像素尺寸保持不变 |
+| 6 | `evaluate`：指标评价与分组统计 | `evaluation/` | 评价清单指定的参考图像、结果图像及可选尺度图与标注 → 单图指标与分组均值 |
+
+`denoise` 根据 TU/PU 先验估计尺度图，自适应选择块尺寸；`fixed` 对配置中的每种块尺寸分别去噪，生成固定块对照结果。
 
 `run.py` 提供统一入口，`configs/paper.json` 集中定义实验参数；数据位置、输出位置、MATLAB、编码器和计算设备均由命令行传入。`common/` 只处理配置、输入约定及 MATLAB 调用。
 
@@ -133,7 +141,7 @@ hevc-ksvd-mamba-for-ultrasound/
 
 ### 1. RF 成像与图像预处理
 
-输入可为包含通道信号及物理采集参数的 MAT 文件，也可为已有的单帧 8 位灰度 TIFF。RF 输入先通过 `beamform` 生成 B 模式 TIFF，已有图像直接进入 `prepare`。低/高波束线数配对必须配准并采用相同预处理，训练、验证和测试来源由数据提供者事先划分。
+输入可为包含通道信号及物理采集参数的 MAT 文件，也可为已有的单帧 8 位灰度 TIFF。RF 输入先通过 `beamform` 子命令进行波束合成，生成 B 模式 TIFF；已有图像直接使用 `prepare` 子命令进行预处理。低/高波束线数配对必须配准并采用相同预处理，训练、验证和测试来源由数据提供者事先划分。
 
 ```mermaid
 flowchart TD
@@ -156,7 +164,7 @@ flowchart TD
 
 ### 2. 基于 HEVC 块划分的结构先验提取
 
-`prior` 对 PGM 进行帧内编码，利用图像结构决定预测单元 (Prediction Unit, PU) 和变换单元 (Transform Unit, TU) 的块划分。论文通过限制帧内预测模式、重构率失真成本并自适应调整量化清零阈值，使组织边界、亮点目标和高频纹理区域形成更细粒度划分。后续去噪读取这些结构先验数组，图像像素来自预处理 TIFF。
+`prior` 子命令对 PGM 进行帧内编码，利用图像结构决定预测单元 (Prediction Unit, PU) 和变换单元 (Transform Unit, TU) 的块划分。论文通过限制帧内预测模式、重构率失真成本并自适应调整量化清零阈值，使组织边界、亮点目标和高频纹理区域形成更细粒度划分。后续去噪读取这些结构先验数组，图像像素来自预处理 TIFF。
 
 ```mermaid
 flowchart TD
@@ -291,7 +299,7 @@ T_{\mathrm{base}},G_{\mathrm{TU}}\le2
 
 ### 3. 基于 Block K-SVD 的自适应压缩感知去噪
 
-Block K-SVD 是论文提出的结构先验引导的自适应分块 K-SVD 去噪方法。`denoise` 将图像、TU 和 PU 结合，通过 TU 中心点插值、PU 灰度调节、平滑滤波与离散聚类构建像素级块大小图（下文简称尺度图），再按各活跃尺度分别进行字典学习和稀疏重建，最后通过高斯加权融合得到去噪图像。字典训练图像由当前输入叠加合成脉冲/高斯噪声得到；最终稀疏重建使用当前输入图像的块。
+Block K-SVD 是论文提出的结构先验引导的自适应分块 K-SVD 去噪方法。`denoise` 子命令将图像、TU 和 PU 结合，通过 TU 中心点插值、PU 灰度调节、平滑滤波与离散聚类构建像素级块大小图（下文简称尺度图），再按各活跃尺度分别进行字典学习和稀疏重建，最后通过高斯加权融合得到去噪图像。字典训练图像由当前输入叠加合成脉冲/高斯噪声得到；最终稀疏重建使用当前输入图像的块。
 
 ```mermaid
 flowchart TD
@@ -327,7 +335,7 @@ flowchart TD
 | `cascade` | 4、8、12 | USR-Mamba 推理前级 |
 | `denoising` | 4、8、12、16、20、24 | 独立去噪与固定块对照 |
 
-`fixed` 命令跳过 TU/PU 尺度估计，对配置中的每种固定块尺寸分别学习、重建，并使用等权重融合；同一图像的各固定尺度共享同一份合成训练噪声。结果写入 `images/fixed_04/` 等目录。
+`fixed` 子命令跳过 TU/PU 尺度估计，对配置中的每种固定块尺寸分别学习、重建，并使用等权重融合；同一图像的各固定尺度共享同一份合成训练噪声。结果写入 `images/fixed_04/` 等目录。
 
 <a id="paper-ksvd-equations"></a>
 
@@ -447,12 +455,12 @@ w_b(i,j)=\mathrm{e}^{-\frac{(i-c)^2+(j-c)^2}{2(\eta b)^2}}
 
 ### 4. USR-Mamba 配对训练与独立验证
 
-`train` 读取 `pairs.csv`，以预处理后的原始 32 线图像为输入、原始 128 线图像为参考。清单包含 `source_id,split,input,reference`，`split` 为 `train`、`val` 或 `test`；训练入口只使用前两者，并核验来源及文件划分。
+`train` 子命令读取 `pairs.csv`，以预处理后的原始 32 线图像为输入、原始 128 线图像为参考。清单包含 `source_id,split,input,reference`，`split` 为 `train`、`val` 或 `test`；训练入口只使用前两者，并核验来源及文件划分。
 
 ```mermaid
 flowchart TD
     Manifest["pairs.csv<br/>原始低/高波束线数 TIFF"] --> Check["核验来源、路径、尺寸<br/>及集合划分"]
-    Check --> Train["train：四次成对裁剪<br/>Lanczos 恢复尺寸<br/>水平翻转"]
+    Check --> Train["训练集 (split=train)<br/>四次成对裁剪<br/>Lanczos 恢复尺寸<br/>水平翻转"]
     Train --> Normalize["灰度映射到 −1 至 1"]
     Normalize --> Generator["USR-Mamba 生成增强图像"]
     Generator --> L1["与对应 128 线参考计算 L1 损失"]
@@ -461,7 +469,7 @@ flowchart TD
     Discriminator --> Adversarial["最小二乘对抗损失"]
     L1 --> Update["加权损失与 Adam<br/>交替更新生成器、判别器"]
     Adversarial --> Update
-    Check --> Validation["val：完整配对图像<br/>不裁剪、不翻转，灰度归一化"]
+    Check --> Validation["验证集 (split=val)<br/>完整配对图像<br/>不裁剪、不翻转，灰度归一化"]
     Update --> Validate["每轮切换到评价模式<br/>无梯度计算验证 L1"]
     Validation --> Validate
     Validate --> Logs["losses.csv<br/>训练 L1、验证 L1 与学习率"]
@@ -505,7 +513,7 @@ r(e)=r_0\left(1-\frac{\max\{0,e-E_c\}}{E_d+1}\right)
 
 ### 5. 基于 USR-Mamba 的状态空间超分辨率增强
 
-USR-Mamba 是论文构建的医学超声 B 模式图像超分辨率网络，在编码器—高分辨率瓶颈—解码器结构中结合空间—频率双域状态空间建模、残差卷积和角向均匀扫描。`infer` 加载指定权重及其中记录的模型结构，对使用 `cascade` 配置去噪后的 32 线图像进行超分辨率重建。以下是默认完整模型的数据流，`H×W` 表示输入的高和宽；扫描顺序的实现说明见式 (4-6) 之后。
+USR-Mamba 是论文构建的医学超声 B 模式图像超分辨率网络，在编码器—高分辨率瓶颈—解码器结构中结合空间—频率双域状态空间建模、残差卷积和角向均匀扫描。`infer` 子命令加载指定权重及其中记录的模型结构，对使用 `cascade` 配置去噪后的 32 线图像进行超分辨率重建。以下是默认完整模型的数据流，`H×W` 表示输入的高和宽；扫描顺序的实现说明见式 (4-6) 之后。
 
 ```mermaid
 flowchart TD
@@ -628,7 +636,7 @@ $`\ell[n,c]`$ 为隐藏状态，$`\bar{A}`$ 为状态转移参数，$`\bar{B}[n]
 | FWHM | Full Width at Half Maximum | 半高全宽 | `fwhm_x` / `fwhm_y` |
 | LPIPS | Learned Perceptual Image Patch Similarity | 学习感知图像块相似度 | `lpips` |
 
-`evaluate` 读取 `evaluation.csv`，每行指定参考图像、方法结果及可选的连续尺度图、ROI、TU 和掩码。结果与参考必须处于相同像素坐标系；原始输入、固定块去噪、自适应去噪和网络增强结果可分别建立清单进行比较。
+`evaluate` 子命令读取 `evaluation.csv`，每行指定参考图像、方法结果及可选的连续尺度图、ROI、TU 和掩码。结果与参考必须处于相同像素坐标系；原始输入、固定块去噪、自适应去噪和网络增强结果可分别建立清单进行比较。
 
 ```mermaid
 flowchart TD
@@ -753,7 +761,7 @@ TU 统计按块中心是否位于二值掩码内分为 ROI 与背景。设两类
 
 ## 运行与复现
 
-依次使用 `beamform`（可选）、`prepare`、`prior`、`denoise` 准备图像；通过 `train` 得到权重后执行 `infer`，最后通过 `evaluate` 汇总结果。已有兼容权重时可直接进入推理；`fixed` 命令及各网络变体用于独立对照。输入清单、标注和数据划分需事先准备。
+依次使用 `beamform`（可选）、`prepare`、`prior`、`denoise` 准备图像；通过 `train` 得到权重后执行 `infer`，最后通过 `evaluate` 汇总结果。已有兼容权重时可直接进入推理；`fixed` 子命令及各网络变体用于独立对照。输入清单、标注和数据划分需事先准备。
 
 环境安装、编码器构建和各阶段命令见[复现指南](docs/reproduction.md)，输入与清单格式见[数据契约](docs/data_contract.md)，已完成的合成验证及实测范围见[验证记录](docs/validation.md)。
 
