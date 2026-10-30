@@ -181,101 +181,85 @@ flowchart TD
 设 $`c_i`$ 为第 $`i`$ 个变换系数，$`l_{i,k}`$ 为其第 $`k`$ 个候选量化值，$`D(c_i,l_{i,k})`$ 为量化失真，$`R(l_{i,k})`$ 为编码比特数，$`\lambda`$ 为拉格朗日乘子。论文的量化选择准则为：
 
 ```math
-l_i^*=\underset{k}{\mathrm{argmin}}
-\left\{D(c_i,l_{i,k})+\lambda R(l_{i,k})\right\}.
+l_i^*=\underset{k}{\mathrm{argmin}}\left\{D(c_i,l_{i,k})+\lambda\cdot R(l_{i,k})\right\}
 \qquad\text{(2-1)}
 ```
 
 这里 $`l_i^*`$ 表示上述最优候选所对应的量化值。设 $`X_{\mathrm{orig}}`$、$`X_{\mathrm{rcon}}`$ 分别为原始块和重建块，传统率失真成本写为：
 
 ```math
-\mathrm{RD}_{\mathrm{cost}}
-=D_{\mathrm{SSE}}(X_{\mathrm{orig}},X_{\mathrm{rcon}})+\lambda R.
+\mathrm{RD}_{\mathrm{cost}}=D_{\mathrm{SSE}}(X_{\mathrm{orig}},X_{\mathrm{rcon}})+\lambda\cdot R
 \qquad\text{(2-2)}
 ```
 
-编码器以离散质量索引 $`q=\mathrm{qpd6}\in\{0,1,2,3,4\}`$ 查表设置失真与比特数权重，等价地写成：
+编码器以离散质量索引 $`\mathrm{qpd6}\in\{0,1,2,3,4\}`$ 查表设置失真与比特数权重，等价地写成：
 
 ```math
-\mathrm{RD}_{\mathrm{cost}}
-=w_d(q)D_{\mathrm{SSE}}+w_b(q)R.
+\mathrm{RD}_{\mathrm{cost}}=w_{\mathrm{d}}(\mathrm{qpd6})\cdot D_{\mathrm{SSE}}+w_{\mathrm{b}}(\mathrm{qpd6})\cdot R
 \qquad\text{(2-3)}
 ```
 
 ```math
-D_{\mathrm{SSE}}
-=\sum_{i=0}^{\mathrm{sz}-1}\sum_{j=0}^{\mathrm{sz}-1}
-\left(X^{\mathrm{orig}}_{i,j}-X^{\mathrm{rcon}}_{i,j}\right)^2.
+D_{\mathrm{SSE}}=\sum_{i=0}^{\mathrm{sz}-1}\sum_{j=0}^{\mathrm{sz}-1}\left(X^{\mathrm{orig}}_{i,j}-X^{\mathrm{rcon}}_{i,j}\right)^2
 \qquad\text{(2-4)}
 ```
 
 ```math
-\begin{cases}
-w_d(q)=[11,11,11,5,1]_q,\\
-w_b(q)=[1,4,16,29,23]_q.
-\end{cases}
+\left\{\begin{gathered}
+w_{\mathrm{d}}(\mathrm{qpd6})=[11,11,11,5,1]_{\mathrm{qpd6}}\\
+w_{\mathrm{b}}(\mathrm{qpd6})=[1,4,16,29,23]_{\mathrm{qpd6}}
+\end{gathered}\right.
 \qquad\text{(2-5)}
 ```
 
-其中 $`\mathrm{sz}`$ 为 TU 边长，$`R`$ 为当前 TU 的编码比特数；$`q`$ 对应配置中的 `quality_index`，不是直接使用 QP 数值作为数组下标。
+其中 $`\mathrm{sz}`$ 为 TU 边长，$`R`$ 为当前 TU 的编码比特数；$`\mathrm{qpd6}`$ 对应配置中的 `quality_index`，不是直接使用 QP 数值作为数组下标。
 
 改进后，追加原始块与重建块之间的梯度差惩罚，并动态调整两项权重：
 
 ```math
-\mathrm{RD}'_{\mathrm{cost}}=w'_dD_{\mathrm{struct}}+w'_bR.
+\mathrm{RD}'_{\mathrm{cost}}=w'_{\mathrm{d}}\cdot D_{\mathrm{struct}}+w'_{\mathrm{b}}\cdot R
 \qquad\text{(2-6)}
 ```
 
 ```math
-D_{\mathrm{struct}}=D_{\mathrm{SSE}}
-+\sum_{i=1}^{\mathrm{sz}-2}\sum_{j=1}^{\mathrm{sz}-2}
-\left(
-\left|G_x^{\mathrm{orig}}-G_x^{\mathrm{rcon}}\right|
-+\left|G_y^{\mathrm{orig}}-G_y^{\mathrm{rcon}}\right|
-\right).
+D_{\mathrm{struct}}=D_{\mathrm{SSE}}+\sum_{i=1}^{\mathrm{sz}-2}\sum_{j=1}^{\mathrm{sz}-2}\left(\left|G_x^{\mathrm{orig}}-G_x^{\mathrm{rcon}}\right|+\left|G_y^{\mathrm{orig}}-G_y^{\mathrm{rcon}}\right|\right)
 \qquad\text{(2-7)}
 ```
 
 ```math
-\begin{cases}
-G_x^{\mathrm{orig}}=X^{\mathrm{orig}}_{i,j+1}-X^{\mathrm{orig}}_{i,j-1},\\
-G_y^{\mathrm{orig}}=X^{\mathrm{orig}}_{i+1,j}-X^{\mathrm{orig}}_{i-1,j}.
-\end{cases}
+\left\{\begin{gathered}
+G_x^{\mathrm{orig}}=X^{\mathrm{orig}}_{i,j+1}-X^{\mathrm{orig}}_{i,j-1}\\
+G_y^{\mathrm{orig}}=X^{\mathrm{orig}}_{i+1,j}-X^{\mathrm{orig}}_{i-1,j}
+\end{gathered}\right.
 \qquad\text{(2-8)}
 ```
 
 ```math
-\begin{cases}
-G_x^{\mathrm{rcon}}=X^{\mathrm{rcon}}_{i,j+1}-X^{\mathrm{rcon}}_{i,j-1},\\
-G_y^{\mathrm{rcon}}=X^{\mathrm{rcon}}_{i+1,j}-X^{\mathrm{rcon}}_{i-1,j}.
-\end{cases}
+\left\{\begin{gathered}
+G_x^{\mathrm{rcon}}=X^{\mathrm{rcon}}_{i,j+1}-X^{\mathrm{rcon}}_{i,j-1}\\
+G_y^{\mathrm{rcon}}=X^{\mathrm{rcon}}_{i+1,j}-X^{\mathrm{rcon}}_{i-1,j}
+\end{gathered}\right.
 \qquad\text{(2-9)}
 ```
 
 ```math
-w'_d=
-\begin{cases}
-\min\left\{w_d(q)+\min\{G_{\mathrm{TU}}-1,12\},24\right\},
-&G_{\mathrm{TU}}>2,\\
-w_d(q),&G_{\mathrm{TU}}\le2.
-\end{cases}
+w'_{\mathrm{d}}=\left\{\begin{gathered}
+\min\left\{w_{\mathrm{d}}(\mathrm{qpd6})+\min\{G_{\mathrm{TU}}-1,12\},24\right\},G_{\mathrm{TU}}>2\\
+w_{\mathrm{d}}(\mathrm{qpd6}),G_{\mathrm{TU}}\le2
+\end{gathered}\right.
 \qquad\text{(2-10)}
 ```
 
 ```math
-w'_b=
-\begin{cases}
-\max\left\{w_b(q)-\min\{G_{\mathrm{TU}}-1,12\},1\right\},
-&G_{\mathrm{TU}}>2,\\
-w_b(q),&G_{\mathrm{TU}}\le2.
-\end{cases}
+w'_{\mathrm{b}}=\left\{\begin{gathered}
+\max\left\{w_{\mathrm{b}}(\mathrm{qpd6})-\min\{G_{\mathrm{TU}}-1,12\},1\right\},G_{\mathrm{TU}}>2\\
+w_{\mathrm{b}}(\mathrm{qpd6}),G_{\mathrm{TU}}\le2
+\end{gathered}\right.
 \qquad\text{(2-11)}
 ```
 
 ```math
-G_{\mathrm{TU}}=\frac{1}{\mathrm{sz}^2}
-\sum_{i=1}^{\mathrm{sz}-2}\sum_{j=1}^{\mathrm{sz}-2}
-\left(\left|G_x^{\mathrm{orig}}\right|+\left|G_y^{\mathrm{orig}}\right|\right).
+G_{\mathrm{TU}}=\frac{1}{\mathrm{sz}^2}\sum_{i=1}^{\mathrm{sz}-2}\sum_{j=1}^{\mathrm{sz}-2}\left(\left|G_x^{\mathrm{orig}}\right|+\left|G_y^{\mathrm{orig}}\right|\right)
 \qquad\text{(2-12)}
 ```
 
@@ -284,26 +268,24 @@ G_{\mathrm{TU}}=\frac{1}{\mathrm{sz}^2}
 系数群（CG）原清零阈值、基础阈值及自适应阈值分别为：
 
 ```math
-T_{\mathrm{CG}}=\frac{9\times2^{\mathrm{sft}}}{4}
-=9\times2^{\mathrm{sft}-2}.
+T_{\mathrm{CG}}=\frac{9\times2^{\mathrm{sft}}}{4}=9\times2^{\mathrm{sft}-2}
 \qquad\text{(2-13)}
 ```
 
 ```math
-T_{\mathrm{base}}=T_{\mathrm{CG}}=9\times2^{\mathrm{sft}-2}.
+T_{\mathrm{base}}=T_{\mathrm{CG}}=9\times2^{\mathrm{sft}-2}
 \qquad\text{(2-14)}
 ```
 
 ```math
-T_{\mathrm{adaptive}}=
-\begin{cases}
-\max\{T_{\mathrm{base}}/2,1\},&G_{\mathrm{TU}}>2,\\
-T_{\mathrm{base}},&G_{\mathrm{TU}}\le2.
-\end{cases}
+T_{\mathrm{adaptive}}=\left\{\begin{gathered}
+\max\left\{\frac{T_{\mathrm{base}}}{2},1\right\},G_{\mathrm{TU}}>2\\
+T_{\mathrm{base}},G_{\mathrm{TU}}\le2
+\end{gathered}\right.
 \qquad\text{(2-15)}
 ```
 
-其中 $`\mathrm{sft}=\mathrm{LEVEL\_SHIFT\_TABLE}[\mathrm{sz}/8]+q`$，表下标按编码器整数运算解释。代码通过移位实现阈值缩放及整数截断；`zero_multiplier=9`、`zero_shift=2`、`zero_reduction_shift=1` 对应上述默认式。该阈值只控制系数群清零判定，候选量化等级仍按率失真成本比较。
+其中 $`\mathrm{sft}=\mathrm{LEVEL\_SHIFT\_TABLE}[\mathrm{sz}/8]+\mathrm{qpd6}`$，表下标按编码器整数运算解释。代码通过移位实现阈值缩放及整数截断；`zero_multiplier=9`、`zero_shift=2`、`zero_reduction_shift=1` 对应上述默认式。该阈值只控制系数群清零判定，候选量化等级仍按率失真成本比较。
 
 对应实现：[先验提取入口](hevc_prior/runner.py)、[编码器](hevc_prior/codec.c)。
 
@@ -351,57 +333,56 @@ flowchart TD
 
 #### 论文公式：稀疏表示与 K-SVD 更新
 
-将 $`m`$ 个图像块展开为列向量，组成 $`X=[x_1,\ldots,x_m]\in\mathbb{R}^{d\times m}`$；$`D\in\mathbb{R}^{d\times K}`$ 为字典，$`A=[a_1,\ldots,a_m]\in\mathbb{R}^{K\times m}`$ 为稀疏系数。这里以 $`d`$ 表示论文中的块向量维数 $`n`$，避免与后文尺度层数混淆。字典学习目标为：
+将 $`m`$ 个图像块展开为列向量，组成 $`X=[x_1,x_2,\cdots,x_m]\in\mathbb{R}^{n\times m}`$；$`D\in\mathbb{R}^{n\times k}`$ 为字典，$`A=[a_1,a_2,\cdots,a_m]\in\mathbb{R}^{k\times m}`$ 为稀疏系数。这里 $`n`$ 为块向量维数，$`k`$ 为字典原子数；论文在式（3-10）中再次以 $`n`$ 表示尺度层数。字典学习目标为：
 
 ```math
-\min_{D,A}\|X-DA\|_F^2,
-\qquad \mathrm{s.t.}\quad \|a_i\|_0\le L,\quad i=1,\ldots,m.
+\underset{D,A}{\min}\|X-DA\|_F^2\quad\mathrm{s.t.}\quad\left\{\begin{gathered}
+\|a_i\|_0\le L\\
+i=1,2,\cdots,m
+\end{gathered}\right.
 \qquad\text{(3-1)}
 ```
 
 $`\|\cdot\|_F`$ 为 Frobenius 范数，$`\|\cdot\|_0`$ 为非零元素数，$`L`$ 为单块允许使用的原子数。字典列初始归一化到单位二范数。论文给出的第 $`\ell`$ 步选原子与残差更新为：
 
 ```math
-I_\ell=\underset{j}{\mathrm{argmax}}
-\left\{d_j^{\mathsf T}r_{\ell-1}\right\}.
+I_\ell=\underset{\mathrm{j}}{\mathrm{argmax}}\left\{d_j^{\mathrm{T}}r_{\ell-1}\right\}
 \qquad\text{(3-2)}
 ```
 
 ```math
-r_\ell=r_{\ell-1}-a_{I_\ell}d_{I_\ell}.
+r_\ell=r_{\ell-1}-a_{I_\ell}d_{I_\ell}
 \qquad\text{(3-3)}
 ```
 
-其中 $`r_0=x_i`$。 **实现补充：** 当前 `sparse_encode.m` 在尚未选取的原子中最大化相关性的 **绝对值**，并令 $`a_{I_\ell}=d_{I_\ell}^{\mathsf T}r_{\ell-1}`$，再按式（3-3）更新；不进行已选原子的联合最小二乘重估。它采用论文所述的逐次相关选择与残差更新规则，应与严格的正交匹配追踪实现区分。停止条件为已选 $`L`$ 个原子或 $`\|r_\ell\|_2\le\varepsilon`$；默认 $`K=512`$、$`L=\mathrm{round}(0.1K)=51`$、$`\varepsilon=46225`$，数值按当前输入量纲直接比较。
+其中 $`r_0=x_i`$。 **实现补充：** 当前 `sparse_encode.m` 在尚未选取的原子中最大化相关性的 **绝对值**，并令 $`a_{I_\ell}=d_{I_\ell}^{\mathrm{T}}r_{\ell-1}`$，再按式（3-3）更新；不进行已选原子的联合最小二乘重估。它采用论文所述的逐次相关选择与残差更新规则，应与严格的正交匹配追踪实现区分。停止条件为已选 $`L`$ 个原子或 $`\|r_\ell\|_2\le\varepsilon`$；默认 $`k=512`$、$`L=\mathrm{round}(0.1k)=51`$、$`\varepsilon=46225`$，数值按当前输入量纲直接比较。
 
 对于第 $`t`$ 个字典原子，取激活样本集合 $`\mathcal{I}_t=\{i:A(t,i)\ne0\}`$，先补回该原子的贡献，构造局部残差：
 
 ```math
-R_t=X(:,\mathcal{I}_t)-DA(:,\mathcal{I}_t)
-+d_tA(t,\mathcal{I}_t).
+R_t=X(:,\mathcal{I}_t)-DA(:,\mathcal{I}_t)+d_tA(t,\mathcal{I}_t)
 \qquad\text{(3-4)}
 ```
 
 ```math
-R_t\approx U\Sigma V^{\mathsf T}.
+R_t\approx U\Sigma V^{\mathrm{T}}
 \qquad\text{(3-5)}
 ```
 
 ```math
-\begin{cases}
-d_t\leftarrow U(:,1),\\
-A(t,\mathcal{I}_t)\leftarrow\Sigma(1,1)V(:,1)^{\mathsf T}.
-\end{cases}
+\left\{\begin{gathered}
+d_t\leftarrow U(:,1)\\
+A(t,\mathcal{I}_t)\leftarrow\Sigma(1,1)V(:,1)^{\mathrm{T}}
+\end{gathered}\right\}
 \qquad\text{(3-6)}
 ```
 
-代码用 `svds(local,1)` 求上述秩一更新；若原子没有激活样本，当前实现将全部样本作为更新集合。每轮更新后重新稀疏编码，计算 $`e_k=\|X-DA\|_F/\sqrt{dm}`$，在 $`|e_k-e_{k-1}|<0.0009`$ 或达到 10 轮时停止，初始比较值 $`e_0=0`$。
+代码用 `svds(local,1)` 求上述秩一更新；若原子没有激活样本，当前实现将全部样本作为更新集合。每轮更新后重新稀疏编码，计算 $`e_k=\frac{\|X-DA\|_F}{\sqrt{\mathstrut nm}}`$，在 $`|e_k-e_{k-1}|<0.0009`$ 或达到 10 轮时停止，初始比较值 $`e_0=0`$。
 
-设第 $`q`$ 个重建块为 $`\hat{x}_q`$，其权重窗为 $`w_q`$；在全图坐标中只对覆盖当前像素的块求和，得到：
+设第 $`q`$ 个重建块为 $`x_q`$，其权重窗为 $`w_q`$；在全图坐标中只对覆盖当前像素的块求和，得到：
 
 ```math
-\hat{I}(i,j)=
-\frac{\sum_q w_q(i,j)\hat{x}_q(i,j)}{\sum_q w_q(i,j)}.
+\hat{I}(i,j)=\frac{\sum_q w_q(i,j)\hat{x}_q(i,j)}{\sum_q w_q(i,j)}
 \qquad\text{(3-7)}
 ```
 
@@ -412,42 +393,36 @@ A(t,\mathcal{I}_t)\leftarrow\Sigma(1,1)V(:,1)^{\mathsf T}.
 设像素 $`p`$ 位于三个 TU 中心构成的三角形内，顶点尺度为 $`s_1,s_2,s_3`$，重心坐标为 $`\lambda_1,\lambda_2,\lambda_3`$，则：
 
 ```math
-\begin{cases}
-s(p)=\lambda_1s_1+\lambda_2s_2+\lambda_3s_3,\\
-\lambda_1+\lambda_2+\lambda_3=1.
-\end{cases}
+\left\{\begin{gathered}
+s(p)=\lambda_1s_1+\lambda_2s_2+\lambda_3s_3\\
+\lambda_1+\lambda_2+\lambda_3=1
+\end{gathered}\right.
 \qquad\text{(3-8)}
 ```
 
-三角形内 $`\lambda_k\ge0`$；凸包外用最近邻补全，中心不足或共线时整体回退到最近邻。设 $`\bar{g}_{\mathrm{PU}}(p)`$ 为像素所在 PU 的平均灰度，$`g_{\max}`$ 为所有 PU 平均灰度的最大值，放大后尺度为：
+三角形内 $`\lambda_k\ge0`$；凸包外用最近邻补全，中心不足或共线时整体回退到最近邻。设 $`\bar{g}_{\mathrm{PU}}(p)`$ 为像素所在 PU 的平均灰度，$`g_{\mathrm{max}}`$ 为所有 PU 平均灰度的最大值，放大后尺度为：
 
 ```math
-s'(p)=s(p)\left[
-1+\alpha\left(1-\frac{\bar{g}_{\mathrm{PU}}(p)}{g_{\max}}\right)^\gamma
-\left(\frac{32}{s(p)}-1\right)
-\right].
+s'(p)=s(p)\left[1+\alpha\left(1-\frac{\bar{g}_{\mathrm{PU}}(p)}{g_{\mathrm{max}}}\right)^\gamma\left(\frac{32}{s(p)}-1\right)\right]
 \qquad\text{(3-9)}
 ```
 
-默认 $`\alpha=0.5`$、$`\gamma=6`$，32 对应 `structure_limit`。暗区的放大幅度较大；代码以 $`\max(g_{\max},\mathrm{eps})`$ 防止全黑图除零。随后采用半径 12、窗口 $`25\times25`$ 的均值滤波。为保留论文符号，式（3-10）中的 $`s'`$ 指经过该平滑步骤后的尺度图。
+默认 $`\alpha=0.5`$、$`\gamma=6`$，32 对应 `structure_limit`。暗区的放大幅度较大；代码以 $`\max\{g_{\mathrm{max}},\mathrm{eps}\}`$ 防止全黑图除零。随后采用半径 12、窗口 $`25\times25`$ 的均值滤波。为保留论文符号，式（3-10）中的 $`s'`$ 指经过该平滑步骤后的尺度图。
 
-论文将连续尺度归一化到 $`[4-b_0,4n]`$，这里把原式的下界调节参数 $`b`$ 记为 $`b_0`$，以便与后文块边长 $`b`$ 区分：
+论文将连续尺度归一化到 $`[4-b,4n]`$，这里 $`b`$ 为下界调节参数；论文后文再次以 $`b`$ 表示块边长：
 
 ```math
-\tilde{s}(p)=(4-b_0)+
-\frac{s'(p)-s'_{\min}}{s'_{\max}-s'_{\min}}
-\left(4n-(4-b_0)\right).
+\tilde{s}(p)=(4-b)+\frac{s'(p)-s'_{\mathrm{min}}}{s'_{\mathrm{max}}-s'_{\mathrm{min}}}\left(4n-(4-b)\right)
 \qquad\text{(3-10)}
 ```
 
-**实现补充：** 代码以 `lower_bound` 直接指定下界 $`a`$，以所选尺度集合 $`\mathcal{B}`$ 的最大值指定上界，默认 $`a=0`$，对应原式 $`b_0=4`$：
+**实现补充：** 代码以 `lower_bound` 直接指定下界 $`a`$，以所选尺度集合 $`\mathcal{B}`$ 的最大值指定上界，默认 $`a=0`$，对应原式 $`b=4`$：
 
 ```math
-\tilde{s}(p)=a+
-\frac{s'(p)-s'_{\min}}{s'_{\max}-s'_{\min}}(\max\mathcal{B}-a),
-\qquad
-s_{\mathrm{disc}}(p)=\underset{b\in\mathcal{B}}{\mathrm{argmin}}
-\left|\tilde{s}(p)-b\right|.
+\begin{gathered}
+\tilde{s}(p)=a+\frac{s'(p)-s'_{\mathrm{min}}}{s'_{\mathrm{max}}-s'_{\mathrm{min}}}\left(\mathrm{max}\,\mathcal{B}-a\right)\\
+s_{\mathrm{disc}}(p)=\underset{b\in\mathcal{B}}{\mathrm{argmin}}\left|\tilde{s}(p)-b\right|
+\end{gathered}
 ```
 
 若尺度图近似常量，代码直接令连续图和离散图均为 $`\min\mathcal{B}`$；最近尺度并列时取配置中先出现的较小值。独立去噪取 $`n=6`$、$`\mathcal{B}=\{4,8,12,16,20,24\}`$，级联前级取 $`n=3`$、$`\mathcal{B}=\{4,8,12\}`$。
@@ -455,19 +430,18 @@ s_{\mathrm{disc}}(p)=\underset{b\in\mathcal{B}}{\mathrm{argmin}}
 属于块边长 $`b`$ 的训练样本矩阵、字典及稀疏系数分别记为 $`X_b,D_b,A_b`$，各活跃尺度独立求解：
 
 ```math
-\min_{D_b,A_b}\|X_b-D_bA_b\|_F^2,
-\qquad \mathrm{s.t.}\quad\|a_i^{(b)}\|_0\le L.
+\underset{D_b,A_b}{\min}\|X_b-D_bA_b\|_F^2\quad\mathrm{s.t.}\quad\|a_i^{(b)}\|_0\le L
 \qquad\text{(3-11)}
 ```
 
 每个块的向量维数为 $`b^2`$。训练样本来自叠加合成噪声的图像，最终编码块来自当前输入图像。重建后的块按式（3-7）融合，自适应分块采用高斯窗：
 
 ```math
-w_b(i,j)=\exp\left[-\frac{(i-c)^2+(j-c)^2}{2(\eta b)^2}\right].
+w_b(i,j)=\mathrm{e}^{-\frac{(i-c)^2+(j-c)^2}{2(\eta b)^2}}
 \qquad\text{(3-12)}
 ```
 
-其中局部坐标 $`i,j\in\{1,\ldots,b\}`$，$`c=(b+1)/2`$，$`\eta=0.5`$ 对应 `fusion_sigma_ratio`。固定块对照使用 $`w_b(i,j)=1`$，每种固定尺度分别输出一幅图像。
+其中局部坐标 $`i,j\in\{1,2,\cdots,b\}`$，$`c=(b+1)/2`$，$`\eta=0.5`$ 对应 `fusion_sigma_ratio`。固定块对照使用 $`w_b(i,j)=1`$，每种固定尺度分别输出一幅图像。
 
 对应实现：[批量去噪](block_ksvd/batch_denoise.m)、[尺度图](block_ksvd/scale_map.m)、[字典学习](block_ksvd/dictionary_learning.m)、[稀疏编码](block_ksvd/sparse_encode.m)、[重建与融合](block_ksvd/reconstruct_image.m)。
 
@@ -504,32 +478,28 @@ flowchart TD
 
 #### 实现补充：输入、训练损失与学习率
 
-对 8 位灰度值 $`I`$，网络输入的归一化为 $`x=I/127.5-1`$。设原始 32 线训练输入为 $`x`$，配对 128 线参考为 $`y`$，生成器为 $`G`$，条件判别器为 $`D`$，$`\langle\cdot\rangle`$ 表示对批次及相应像素或判别图元素取均值，则当前训练目标为：
+对 8 位灰度值 $`I`$，网络输入的归一化为 $`x=\frac{I}{127.5}-1`$。设原始 32 线训练输入为 $`x`$，配对 128 线参考为 $`y`$，生成器为 $`G(\cdot)`$，条件判别器为 $`D(\cdot)`$，$`\langle\cdot\rangle`$ 表示对批次及相应像素或判别图元素取均值，则当前训练目标为：
 
 ```math
-\begin{aligned}
-\hat{y}&=G(x),\\
-\mathcal{L}_1&=\left\langle|\hat{y}-y|\right\rangle,\\
-\mathcal{L}_{\mathrm{adv}}&=
-\left\langle\left(D([x;\hat{y}])-1\right)^2\right\rangle,\\
-\mathcal{L}_G&=10\mathcal{L}_1+\mathcal{L}_{\mathrm{adv}},\\
-\mathcal{L}_D&=\frac12\left[
-\left\langle\left(D([x;y])-1\right)^2\right\rangle+
-\left\langle D(\mathcal{R}([x;\mathrm{stopgrad}(\hat{y})]))^2\right\rangle
-\right].
-\end{aligned}
+\begin{gathered}
+\hat{y}=G(x)\\
+\mathcal{L}_1=\left\langle\left|\hat{y}-y\right|\right\rangle\\
+\mathcal{L}_{\mathrm{adv}}=\left\langle\left(D([x;\hat{y}])-1\right)^2\right\rangle\\
+\mathcal{L}_G=10\mathcal{L}_1+\mathcal{L}_{\mathrm{adv}}\\
+\mathcal{L}_D=\frac12\left[\left\langle\left(D([x;y])-1\right)^2\right\rangle+\left\langle D\left(\mathcal{R}\left([x;\mathrm{stopgrad}(\hat{y})]\right)\right)^2\right\rangle\right]
+\end{gathered}
 ```
 
-$`[\cdot;\cdot]`$ 为通道拼接，$`\mathcal{R}`$ 为容量 50、历史替换概率 0.5 的生成配对回放池；`stopgrad` 表示更新判别器时不向生成器回传梯度。损失权重分别由 `l1_weight`、`adversarial_weight` 配置；上式给出默认值，代码还以 `adversarial_weight` 缩放判别器损失，设为 0 时跳过对抗更新。验证集只计算 $`\mathcal{L}_1`$。
+$`[\cdot;\cdot]`$ 为通道拼接，$`\mathcal{R}(\cdot)`$ 为容量 50、历史替换概率 0.5 的生成配对回放池；$`\mathrm{stopgrad}(\cdot)`$ 表示更新判别器时不向生成器回传梯度。损失权重分别由 `l1_weight`、`adversarial_weight` 配置；上式给出默认值，代码还以 `adversarial_weight` 缩放判别器损失，设为 0 时跳过对抗更新。验证集只计算 $`\mathcal{L}_1`$。
 
 设轮次 $`e`$ 从 1 开始，恒定阶段 $`E_c=30`$、衰减阶段 $`E_d=30`$，初始学习率 $`r_0=0.0002`$，代码实际使用：
 
 ```math
-r(e)=r_0\left(1-\frac{\max(0,e-E_c)}{E_d+1}\right),
-\qquad e=1,\ldots,E_c+E_d.
+r(e)=r_0\left(1-\frac{\max\{0,e-E_c\}}{E_d+1}\right)
+\qquad e=1,2,\cdots,E_c+E_d
 ```
 
-因此最后一轮学习率为 $`r_0/31`$。默认用 Adam、$`\beta_1=0.5`$、$`\beta_2=0.999`$ 交替更新生成器和判别器。
+因此最后一轮学习率为 $`\frac{r_0}{31}`$。默认用 Adam、$`\beta_1=0.5`$、$`\beta_2=0.999`$ 交替更新生成器和判别器。
 
 对应实现：[配对数据与划分](usr_mamba/dataset.py)、[训练与验证](usr_mamba/training.py)。
 
@@ -561,67 +531,67 @@ flowchart TD
 
 #### 论文公式：编码、双域状态空间与解码
 
-设 $`I_{\mathrm{LR}}`$ 为低分辨率超声输入（低波束线数），$`I_{\mathrm{HR}}`$ 为高分辨率参考（高波束线数），$`U`$ 为输入尺寸变换，$`E`$ 为编码器，$`f_1`$ 为瓶颈输入，$`\{s_l\}_{l=1}^{L}`$ 为跳连特征集合：
+设 $`I_{\mathrm{LR}}`$ 为低分辨率超声输入（低波束线数），$`I_{\mathrm{HR}}`$ 为高分辨率参考（高波束线数），$`U(\cdot)`$ 为输入尺寸变换，$`E(\cdot)`$ 为编码器，$`f_1`$ 为瓶颈输入，$`\{s_l\}_{l=1}^{L}`$ 为跳连特征集合：
 
 ```math
-\begin{cases}
-X=U(I_{\mathrm{LR}}),\\
-\left(f_1,\{s_l\}_{l=1}^{L}\right)=E(X).
-\end{cases}
+\left\{\begin{gathered}
+X=U(I_{\mathrm{LR}})\\
+\left(f_1,\{s_l\}_{l=1}^L\right)=E(X)
+\end{gathered}\right.
 \qquad\text{(4-1)}
 ```
 
-论文允许在预处理已得到目标尺寸时直接使用同尺寸输入。本项目的 32／128 线图像已处于同一像素网格，故这里 $`U`$ 为恒等尺寸映射，灰度另按前述公式归一化。
+论文允许在预处理已得到目标尺寸时直接令 $`X=I_{\mathrm{LR}}^{\mathrm{up}}`$。本项目的 32／128 线图像已处于同一像素网格，故这里 $`U`$ 为恒等尺寸映射，灰度另按前述公式归一化。
 
 设瓶颈阶段数 $`J=9`$，双域模块位置集合 $`S=\{1,5,9\}`$，则论文的阶段更新为：
 
 ```math
-\begin{cases}
-\tilde{f}_j=
-\begin{cases}
-\mathcal{D}_j(f_j),&j\in S,\\
-f_j,&j\notin S,
-\end{cases}\\
-f_{j+1}=\mathrm{rCNN}_j(\tilde{f}_j),\quad j=1,\ldots,J.
-\end{cases}
+\left\{\begin{gathered}
+\tilde{f}_j=\left\{\begin{gathered}
+\mathcal{D}_j(f_j),j\in S\\
+f_j,j\notin S
+\end{gathered}\right.\\
+\left\{\begin{gathered}
+f_{j+1}=\mathrm{rCNN}_j(\tilde{f}_j)\\
+j=1,2,\cdots,J
+\end{gathered}\right.
+\end{gathered}\right.
 \qquad\text{(4-2)}
 ```
 
-$`\mathcal{D}_j`$ 为双域 SSM 模块，$`\mathrm{rCNN}_j`$ 为残差卷积精炼。令 $`\mathcal{F}`$、$`\mathcal{F}^{-1}`$ 分别为傅里叶变换及逆变换，$`\mathcal{R}`$ 将复频谱实部和虚部沿通道拼接，$`\mathcal{R}^{-1}`$ 将其重新组合为复数，则：
+$`\mathcal{D}_j(\cdot)`$ 为双域 SSM 模块，$`\mathrm{rCNN}_j(\cdot)`$ 为残差卷积精炼。令 $`\mathcal{F}(\cdot)`$、$`\mathcal{F}^{-1}(\cdot)`$ 分别为傅里叶变换及逆变换，$`\mathcal{R}(\cdot)`$ 将复频谱实部和虚部沿通道拼接，$`\mathcal{R}^{-1}(\cdot)`$ 将其重新组合为复数，则：
 
 ```math
-\begin{cases}
-u_I=\mathcal{M}_{I,j}(f_j),\\
-u_F=\mathcal{F}^{-1}\!\left(
-\mathcal{R}^{-1}\!\left(\mathcal{M}_{F,j}\!\left(
-\mathcal{R}(\mathcal{F}(f_j))\right)\right)\right),\\
-\mathcal{D}_j(f_j)=P_j([u_I;u_F]).
-\end{cases}
+\left\{\begin{gathered}
+u_I=\mathcal{M}_{I,j}(f_j)\\
+u_F=\mathcal{F}^{-1}\left(\mathcal{R}^{-1}\mathcal{M}_{F,j}\left(\mathcal{R}\left(\mathcal{F}(f_j)\right)\right)\right)\\
+\mathcal{D}_j(f_j)=P_j([u_I;u_F])
+\end{gathered}\right.
 \qquad\text{(4-3)}
 ```
 
-其中 $`\mathcal{M}_{I,j}`$、$`\mathcal{M}_{F,j}`$ 分别为图像域与傅里叶域分支，$`P_j`$ 为通道投影。此处的 $`\mathcal{R}`$ 是复数重排，与训练小节的回放池符号分别使用。代码对二维 FFT 使用 `fftshift` 中心化，逆变换前使用 `ifftshift`，并取逆变换结果实部；空间序列通道数为 $`C`$，频域实／虚序列通道数为 $`2C`$。
+其中 $`\mathcal{M}_{I,j}(\cdot)`$、$`\mathcal{M}_{F,j}(\cdot)`$ 分别为图像域与傅里叶域分支，$`P_j(\cdot)`$ 为通道投影。此处的 $`\mathcal{R}(\cdot)`$ 是复数重排，与训练小节的回放池符号分别使用。代码对二维 FFT 使用 `fftshift` 中心化，逆变换前使用 `ifftshift`，并取逆变换结果实部；空间序列通道数为 $`C`$，频域实／虚序列通道数为 $`2C`$。
 
 对任一分支输入 $`q`$，论文以通道扩展、局部卷积、门控 SSM 及通道混合描述分支计算：
 
 ```math
-\begin{cases}
-g=\sigma(\mathrm{Lin}_{\beta}(q)),\\
-e=\sigma(\mathrm{DWConv}(\mathrm{Lin}_{\beta}(q))),\\
-M=\mathrm{SSM}_{\theta}(e),\\
-e_{\mathrm{SSM}}=q+\mathrm{Lin}_{1/\beta}(g\odot M),\\
-\mathcal{M}_{*,j}(q)=\mathrm{cmConv}(e_{\mathrm{SSM}})
-+\mathrm{Conv}(e_{\mathrm{SSM}}),\quad *\in\{I,F\}.
-\end{cases}
+\left\{\begin{gathered}
+g=\sigma(\mathrm{Lin}_\beta(q))\\
+e=\sigma(\mathrm{DWConv}(\mathrm{Lin}_\beta(q)))\\
+M=\mathrm{SSM}_\theta(e)\\
+e_{\mathrm{SSM}}=q+\mathrm{Lin}_{1/\beta}(g\odot M)\\
+\mathcal{M}_{*,j}(q)=\mathrm{cmConv}(e_{\mathrm{SSM}})+\mathrm{Conv}(e_{\mathrm{SSM}})\\
+*\in\{I,F\}
+\end{gathered}\right.
 \qquad\text{(4-4)}
 ```
 
-$`\mathrm{Lin}_{\beta}`$ 与 $`\mathrm{Lin}_{1/\beta}`$ 分别扩展和压缩通道，$`\mathrm{DWConv}`$ 为深度卷积，$`\sigma`$ 为激活，$`\odot`$ 为逐元素乘法，$`\mathrm{cmConv}`$ 为通道混合卷积。图像域分支取 $`q=f_j`$，傅里叶域分支取 $`q=\mathcal{R}(\mathcal{F}(f_j))`$。 **实现对应：** 式（4-4）保留论文的模块级表达；当前每个分支具体调用 `LayerNorm` 和 `mamba_ssm.Mamba`，外部再由 `DualDomainState`、`FeatureFusion` 和 `ResidualConvolution` 完成双域融合、输入拼接融合及残差精炼，并未逐项显式搭建式中的所有独立层。
+$`\mathrm{Lin}_{\beta}(\cdot)`$ 与 $`\mathrm{Lin}_{1/\beta}(\cdot)`$ 分别扩展和压缩通道，$`\mathrm{DWConv}(\cdot)`$ 为深度卷积，$`\sigma(\cdot)`$ 为激活，$`\odot`$ 为逐元素乘法，$`\mathrm{cmConv}(\cdot)`$ 为通道混合卷积，$`\mathrm{SSM}_{\theta}(\cdot)`$ 为基于角向均匀扫描的状态空间算子。图像域分支取 $`q=f_j`$，傅里叶域分支取 $`q=\mathcal{R}(\mathcal{F}(f_j))`$。 **实现对应：** 式（4-4）保留论文的模块级表达；当前每个分支具体调用 `LayerNorm` 和 `mamba_ssm.Mamba`，外部再由 `DualDomainState`、`FeatureFusion` 和 `ResidualConvolution` 完成双域融合、输入拼接融合及残差精炼，并未逐项显式搭建式中的所有独立层。
 
-解码器 $`D`$ 融合瓶颈输出与跳连特征：
+解码器 $`D(\cdot)`$ 融合瓶颈输出与跳连特征：
 
 ```math
-\hat{I}_{\mathrm{HR}}=D\left(f_{J+1},\{s_l\}_{l=1}^{L}\right).
+\hat{I}_{\mathrm{HR}}=D\left(f_{J+1},\{s_l\}_{l=1}^L\right)
 \qquad\text{(4-5)}
 ```
 
@@ -629,15 +599,15 @@ $`\mathrm{Lin}_{\beta}`$ 与 $`\mathrm{Lin}_{1/\beta}`$ 分别扩展和压缩通
 
 #### 论文公式：扫描序列与状态更新
 
-设特征图大小为 $`H\times W`$，扫描路径 $`p(n)=(h[n],w[n])`$ 是二维位置的一个排列，$`n=1,\ldots,HW`$，通道索引为 $`c`$。序列化、状态递推与逆排列还原为：
+设特征图大小为 $`H\times W`$，扫描路径 $`p(n)=(h[n],w[n])`$ 是二维位置的一个排列，$`n=1,2,\cdots,H\times W`$，通道索引为 $`c`$。序列化、状态递推与逆排列还原为：
 
 ```math
-\begin{cases}
-z_{\mathrm{in}}[n,c]=e[p(n),c],\\
-\ell[n,c]=\bar{A}\ell[n-1,c]+\bar{B}[n]z_{\mathrm{in}}[n,c],\\
-z_{\mathrm{out}}[n,c]=\bar{C}[n]\ell[n,c],\\
-M[p(n),c]=z_{\mathrm{out}}[n,c].
-\end{cases}
+\left\{\begin{gathered}
+z_{\mathrm{in}}[n,c]=e[p(n),c]\\
+\ell[n,c]=\bar{A}\ell[n-1,c]+\bar{B}[n]z_{\mathrm{in}}[n,c]\\
+z_{\mathrm{out}}[n,c]=\bar{C}[n]\ell[n,c]\\
+M[p(n),c]=z_{\mathrm{out}}[n,c]
+\end{gathered}\right.
 \qquad\text{(4-6)}
 ```
 
@@ -688,12 +658,12 @@ flowchart TD
 设待评价图像有 $`N`$ 个像素，灰度均值为 $`\mu`$，样本方差为 $`\sigma^2=\frac{1}{N-1}\sum_p(I(p)-\mu)^2`$。第 3 章的全图 CNR 与 ENL 为：
 
 ```math
-\mathrm{CNR}=\frac{\mu}{\sigma}.
+\mathrm{CNR}=\frac{\mu}{\sigma}
 \qquad\text{(3-13)}
 ```
 
 ```math
-\mathrm{ENL}=\frac{\mu^2}{\mathrm{Var}(I)}.
+\mathrm{ENL}=\frac{\mu^2}{\mathrm{Var}}
 \qquad\text{(3-14)}
 ```
 
@@ -702,47 +672,38 @@ flowchart TD
 令 $`\nabla I`$ 表示 Sobel 梯度幅值，去噪前后边缘保持指数为：
 
 ```math
-\mathrm{EPI}=\mathrm{corr}
-\left(\nabla I_{\mathrm{orig}},\nabla I_{\mathrm{den}}\right).
+\mathrm{EPI}=\mathrm{corr}\left(\nabla I_{\mathrm{orig}},\nabla I_{\mathrm{den}}\right)
 \qquad\text{(3-15)}
 ```
 
 `evaluate` 实际以清单中的 `reference` 和 `result` 计算该相关系数。若任一梯度图标准差小于 `eps`，当前代码约定 EPI 为 1，此时不应将其解读为充分的边缘保持证据。
 
-设 $`S_{\mathrm{GM}}`$、$`S_{\mathrm{PC}}`$ 为梯度幅值与相位一致性相似图，$`\mathrm{PC}_m`$ 为两张相位一致性图的逐像素最大值，FSIM 定义为：
+设 $`S_{\mathrm{GM}}`$、$`S_{\mathrm{PC}}`$ 为梯度幅值与相位一致性相似图，$`\mathrm{PC}_{\mathrm{m}}`$ 为两张相位一致性图的逐像素最大值，FSIM 定义为：
 
 ```math
-\mathrm{FSIM}=
-\frac{\sum_p S_{\mathrm{GM}}(p)S_{\mathrm{PC}}(p)\mathrm{PC}_m(p)}
-{\sum_p\mathrm{PC}_m(p)}.
+\mathrm{FSIM}=\frac{\sum S_{\mathrm{GM}}S_{\mathrm{PC}}\mathrm{PC}_{\mathrm{m}}}{\sum\mathrm{PC}_{\mathrm{m}}}
 \qquad\text{(3-16)}
 ```
 
 **实现补充：** 当前程序用 Scharr 梯度幅值 $`G_1,G_2`$ 和多尺度 LoG 响应 $`P_1,P_2`$ 计算上述结构，其中 $`P`$ 是相位响应的近似：
 
 ```math
-\begin{aligned}
-P(I)&=\frac{1}{|\mathcal{S}|}
-\sum_{s\in\mathcal{S}}|\mathrm{LoG}_s*I|,
-\quad\mathcal{S}=\{1,2,4\},\\
-S_{\mathrm{GM}}&=\frac{2G_1G_2+T_G}{G_1^2+G_2^2+T_G},
-\quad T_G=0.0026,\\
-S_{\mathrm{PC}}&=\frac{2P_1P_2+T_P}{P_1^2+P_2^2+T_P},
-\quad T_P=0.85,\\
-\mathrm{PC}_m&=\max(P_1,P_2).
-\end{aligned}
+\begin{gathered}
+P(I)=\frac{1}{|\mathcal{S}|}\sum_{s\in\mathcal{S}}|\mathrm{LoG}_s*I|\quad\mathcal{S}=\{1,2,4\}\\
+S_{\mathrm{GM}}=\frac{2G_1G_2+T_G}{G_1^2+G_2^2+T_G}\quad T_G=0.0026\\
+S_{\mathrm{PC}}=\frac{2P_1P_2+T_P}{P_1^2+P_2^2+T_P}\quad T_P=0.85\\
+\mathrm{PC}_{\mathrm{m}}=\max\{P_1,P_2\}
+\end{gathered}
 ```
 
 $`*`$ 表示卷积，其他乘法、平方和最大值按像素计算，图像采用 `[0,1]` 灰度。该 FSIM 使用 LoG 近似，与通用相位一致性实现的数值口径有别。
 
 #### 论文公式：亮点响应与尺度区域评价
 
-设 $`f(t)`$ 为经 ROI 重心校正后提取的一维水平或垂直灰度剖面，半峰值左右交点为 $`t_L,t_R`$，则：
+设 $`f(t)`$ 为经 ROI 重心校正后提取的一维水平或垂直灰度剖面，半峰值左右交点为 $`t_{\mathrm{L}},t_{\mathrm{R}}`$，则：
 
 ```math
-\mathrm{FWHM}=t_R-t_L,
-\qquad \mathrm{s.t.}\quad
-f(t_L)=f(t_R)=\frac12\max_t f(t).
+\mathrm{FWHM}=t_{\mathrm{R}}-t_{\mathrm{L}}\quad\mathrm{s.t.}\quad f(t_{\mathrm{L}})=f(t_{\mathrm{R}})=\frac12\max f(t)
 \qquad\text{(3-17)}
 ```
 
@@ -751,9 +712,7 @@ f(t_L)=f(t_R)=\frac12\max_t f(t).
 对于块大小类别 $`b`$ 对应的区域 $`\Omega_b`$、像素评价量图 $`Q(p)`$ 和与重建一致的高斯权重 $`w_b(p)`$，论文给出的区域平均评价为：
 
 ```math
-\bar{Q}_b=
-\frac{\sum_{p\in\Omega_b}w_b(p)Q(p)}
-{\sum_{p\in\Omega_b}w_b(p)}.
+\bar{Q}_b=\frac{\sum_{p\in\Omega_b}w_b(p)Q(p)}{\sum_{p\in\Omega_b}w_b(p)}
 \qquad\text{(3-18)}
 ```
 
@@ -764,29 +723,28 @@ f(t_L)=f(t_R)=\frac12\max_t f(t).
 第 4 章按连续尺度图 $`\tilde{s}`$ 自动划分目标、背景及噪声区域，具体阈值和计算为：
 
 ```math
-\begin{aligned}
-\Omega_t&=\{p:0\le\tilde{s}(p)<4\},\\
-\Omega_b&=\{p:8<\tilde{s}(p)\le12\},\\
-\Omega_n&=\{p:0\le\tilde{s}(p)\le12\},\\
-\mathrm{CNR}_{\mathrm{region}}&=
-\frac{|\mu_{\Omega_t}-\mu_{\Omega_b}|}
-{\max(\sigma_{\Omega_n},\mathrm{eps})}.
-\end{aligned}
+\begin{gathered}
+\Omega_t=\{p:0\le\tilde{s}(p)<4\}\\
+\Omega_b=\{p:8<\tilde{s}(p)\le12\}\\
+\Omega_n=\{p:0\le\tilde{s}(p)\le12\}\\
+\mathrm{CNR}_{\mathrm{region}}=\frac{|\mu_{\Omega_t}-\mu_{\Omega_b}|}{\max\{\sigma_{\Omega_n},\mathrm{eps}\}}
+\end{gathered}
 ```
 
 $`\mu_\Omega`$、$`\sigma_\Omega`$ 为结果图在区域 $`\Omega`$ 内的均值与样本标准差，CSV 字段为 `cnr`。该定义与式（3-13）的 `global_cnr` 分开报告；三类区域任一为空时保留 NaN。阈值由 `cnr_target`、`cnr_background`、`cnr_noise` 配置。
 
-LPIPS 的当前调用可写为 $`d_{\mathrm{LPIPS}}=\mathrm{LPIPS}_{\mathrm{AlexNet}}(T(I_{\mathrm{result}}),T(I_{\mathrm{reference}}))`$，其中 $`T`$ 将 8 位灰度复制为三通道并映射至 $`[-1,1]`$，数值越低表示感知特征越接近参考。
+LPIPS 的当前调用可写为 $`d_{\mathrm{LPIPS}}=\mathrm{LPIPS}_{\mathrm{AlexNet}}(T(I_{\mathrm{result}}),T(I_{\mathrm{reference}}))`$，其中 $`T(\cdot)`$ 将 8 位灰度复制为三通道并映射至 $`[-1,1]`$，数值越低表示感知特征越接近参考。
 
-论文还讨论了峰值信噪比（Peak Signal-to-Noise Ratio，PSNR）的局限；为便于对照，其定义为 $`\mathrm{MSE}=\frac1N\sum_p(I_{\mathrm{result}}(p)-I_{\mathrm{reference}}(p))^2`$、$`\mathrm{PSNR}=10\log_{10}(M^2/\mathrm{MSE})`$，$`M`$ 为灰度满量程（8 位灰度为 255，归一化灰度为 1）。当前评价入口未导出 PSNR；它也不是论文主要的增强评价指标。
+论文还讨论了峰值信噪比（Peak Signal-to-Noise Ratio，PSNR）的局限；为便于对照，其定义为 $`\mathrm{MSE}=\frac1N\sum_p(I_{\mathrm{result}}(p)-I_{\mathrm{reference}}(p))^2`$、$`\mathrm{PSNR}=10\log_{10}\left(\frac{M^2}{\mathrm{MSE}}\right)`$，$`M`$ 为灰度满量程（8 位灰度为 255，归一化灰度为 1）。当前评价入口未导出 PSNR；它也不是论文主要的增强评价指标。
 
 TU 统计按块中心是否位于二值掩码内分为 ROI 与背景。设两类 TU 集合为 $`\mathcal{T}_r,\mathcal{T}_b`$，TU 边长为 $`s_t`$，则 `roi_tu_mean`、`background_tu_mean` 与 `tu_ratio` 对应：
 
 ```math
-\bar{s}_r=\frac{1}{|\mathcal{T}_r|}\sum_{t\in\mathcal{T}_r}s_t,
-\qquad
-\bar{s}_b=\frac{1}{|\mathcal{T}_b|}\sum_{t\in\mathcal{T}_b}s_t,
-\qquad \rho_{\mathrm{TU}}=\frac{\bar{s}_b}{\bar{s}_r}.
+\begin{gathered}
+\bar{s}_r=\frac{1}{|\mathcal{T}_r|}\sum_{t\in\mathcal{T}_r}s_t\\
+\bar{s}_b=\frac{1}{|\mathcal{T}_b|}\sum_{t\in\mathcal{T}_b}s_t\\
+\rho_{\mathrm{TU}}=\frac{\bar{s}_b}{\bar{s}_r}
+\end{gathered}
 ```
 
 这是按 TU 个数计算的边长均值，不按块面积加权。缺少 TU／掩码时输出 NaN；提供标注但某类为空时，代码将该类均值置 0，ROI 均值为 0 时比值置 Inf。

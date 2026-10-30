@@ -179,101 +179,85 @@ Quality indices 0–4 correspond to QP values 4, 10, 16, 22, and 28; the default
 Let $`c_i`$ be transform coefficient $`i`$, $`l_{i,k}`$ its candidate quantized value $`k`$, $`D(c_i,l_{i,k})`$ the quantization distortion, $`R(l_{i,k})`$ the coded bit count, and $`\lambda`$ the Lagrange multiplier. The thesis selects quantized values using:
 
 ```math
-l_i^*=\underset{k}{\mathrm{argmin}}
-\left\{D(c_i,l_{i,k})+\lambda R(l_{i,k})\right\}.
+l_i^*=\underset{k}{\mathrm{argmin}}\left\{D(c_i,l_{i,k})+\lambda\cdot R(l_{i,k})\right\}
 \qquad\text{(2-1)}
 ```
 
 Here $`l_i^*`$ denotes the quantized value of the optimal candidate above. Let $`X_{\mathrm{orig}}`$ and $`X_{\mathrm{rcon}}`$ be the original and reconstructed blocks. The conventional rate-distortion cost is:
 
 ```math
-\mathrm{RD}_{\mathrm{cost}}
-=D_{\mathrm{SSE}}(X_{\mathrm{orig}},X_{\mathrm{rcon}})+\lambda R.
+\mathrm{RD}_{\mathrm{cost}}=D_{\mathrm{SSE}}(X_{\mathrm{orig}},X_{\mathrm{rcon}})+\lambda\cdot R
 \qquad\text{(2-2)}
 ```
 
-The encoder uses the discrete quality index $`q=\mathrm{qpd6}\in\{0,1,2,3,4\}`$ to look up distortion and bit-count weights, equivalently written as:
+The encoder uses the discrete quality index $`\mathrm{qpd6}\in\{0,1,2,3,4\}`$ to look up distortion and bit-count weights, equivalently written as:
 
 ```math
-\mathrm{RD}_{\mathrm{cost}}
-=w_d(q)D_{\mathrm{SSE}}+w_b(q)R.
+\mathrm{RD}_{\mathrm{cost}}=w_{\mathrm{d}}(\mathrm{qpd6})\cdot D_{\mathrm{SSE}}+w_{\mathrm{b}}(\mathrm{qpd6})\cdot R
 \qquad\text{(2-3)}
 ```
 
 ```math
-D_{\mathrm{SSE}}
-=\sum_{i=0}^{\mathrm{sz}-1}\sum_{j=0}^{\mathrm{sz}-1}
-\left(X^{\mathrm{orig}}_{i,j}-X^{\mathrm{rcon}}_{i,j}\right)^2.
+D_{\mathrm{SSE}}=\sum_{i=0}^{\mathrm{sz}-1}\sum_{j=0}^{\mathrm{sz}-1}\left(X^{\mathrm{orig}}_{i,j}-X^{\mathrm{rcon}}_{i,j}\right)^2
 \qquad\text{(2-4)}
 ```
 
 ```math
-\begin{cases}
-w_d(q)=[11,11,11,5,1]_q,\\
-w_b(q)=[1,4,16,29,23]_q.
-\end{cases}
+\left\{\begin{gathered}
+w_{\mathrm{d}}(\mathrm{qpd6})=[11,11,11,5,1]_{\mathrm{qpd6}}\\
+w_{\mathrm{b}}(\mathrm{qpd6})=[1,4,16,29,23]_{\mathrm{qpd6}}
+\end{gathered}\right.
 \qquad\text{(2-5)}
 ```
 
-Here $`\mathrm{sz}`$ is the TU side length and $`R`$ is the current TU's coded bit count. The index $`q`$ corresponds to `quality_index` in the configuration; the QP value itself is not used as the array index.
+Here $`\mathrm{sz}`$ is the TU side length and $`R`$ is the current TU's coded bit count. The index $`\mathrm{qpd6}`$ corresponds to `quality_index` in the configuration; the QP value itself is not used as the array index.
 
 The modified cost adds a gradient-difference penalty between the original and reconstructed blocks, and adjusts both weights dynamically:
 
 ```math
-\mathrm{RD}'_{\mathrm{cost}}=w'_dD_{\mathrm{struct}}+w'_bR.
+\mathrm{RD}'_{\mathrm{cost}}=w'_{\mathrm{d}}\cdot D_{\mathrm{struct}}+w'_{\mathrm{b}}\cdot R
 \qquad\text{(2-6)}
 ```
 
 ```math
-D_{\mathrm{struct}}=D_{\mathrm{SSE}}
-+\sum_{i=1}^{\mathrm{sz}-2}\sum_{j=1}^{\mathrm{sz}-2}
-\left(
-\left|G_x^{\mathrm{orig}}-G_x^{\mathrm{rcon}}\right|
-+\left|G_y^{\mathrm{orig}}-G_y^{\mathrm{rcon}}\right|
-\right).
+D_{\mathrm{struct}}=D_{\mathrm{SSE}}+\sum_{i=1}^{\mathrm{sz}-2}\sum_{j=1}^{\mathrm{sz}-2}\left(\left|G_x^{\mathrm{orig}}-G_x^{\mathrm{rcon}}\right|+\left|G_y^{\mathrm{orig}}-G_y^{\mathrm{rcon}}\right|\right)
 \qquad\text{(2-7)}
 ```
 
 ```math
-\begin{cases}
-G_x^{\mathrm{orig}}=X^{\mathrm{orig}}_{i,j+1}-X^{\mathrm{orig}}_{i,j-1},\\
-G_y^{\mathrm{orig}}=X^{\mathrm{orig}}_{i+1,j}-X^{\mathrm{orig}}_{i-1,j}.
-\end{cases}
+\left\{\begin{gathered}
+G_x^{\mathrm{orig}}=X^{\mathrm{orig}}_{i,j+1}-X^{\mathrm{orig}}_{i,j-1}\\
+G_y^{\mathrm{orig}}=X^{\mathrm{orig}}_{i+1,j}-X^{\mathrm{orig}}_{i-1,j}
+\end{gathered}\right.
 \qquad\text{(2-8)}
 ```
 
 ```math
-\begin{cases}
-G_x^{\mathrm{rcon}}=X^{\mathrm{rcon}}_{i,j+1}-X^{\mathrm{rcon}}_{i,j-1},\\
-G_y^{\mathrm{rcon}}=X^{\mathrm{rcon}}_{i+1,j}-X^{\mathrm{rcon}}_{i-1,j}.
-\end{cases}
+\left\{\begin{gathered}
+G_x^{\mathrm{rcon}}=X^{\mathrm{rcon}}_{i,j+1}-X^{\mathrm{rcon}}_{i,j-1}\\
+G_y^{\mathrm{rcon}}=X^{\mathrm{rcon}}_{i+1,j}-X^{\mathrm{rcon}}_{i-1,j}
+\end{gathered}\right.
 \qquad\text{(2-9)}
 ```
 
 ```math
-w'_d=
-\begin{cases}
-\min\left\{w_d(q)+\min\{G_{\mathrm{TU}}-1,12\},24\right\},
-&G_{\mathrm{TU}}>2,\\
-w_d(q),&G_{\mathrm{TU}}\le2.
-\end{cases}
+w'_{\mathrm{d}}=\left\{\begin{gathered}
+\min\left\{w_{\mathrm{d}}(\mathrm{qpd6})+\min\{G_{\mathrm{TU}}-1,12\},24\right\},G_{\mathrm{TU}}>2\\
+w_{\mathrm{d}}(\mathrm{qpd6}),G_{\mathrm{TU}}\le2
+\end{gathered}\right.
 \qquad\text{(2-10)}
 ```
 
 ```math
-w'_b=
-\begin{cases}
-\max\left\{w_b(q)-\min\{G_{\mathrm{TU}}-1,12\},1\right\},
-&G_{\mathrm{TU}}>2,\\
-w_b(q),&G_{\mathrm{TU}}\le2.
-\end{cases}
+w'_{\mathrm{b}}=\left\{\begin{gathered}
+\max\left\{w_{\mathrm{b}}(\mathrm{qpd6})-\min\{G_{\mathrm{TU}}-1,12\},1\right\},G_{\mathrm{TU}}>2\\
+w_{\mathrm{b}}(\mathrm{qpd6}),G_{\mathrm{TU}}\le2
+\end{gathered}\right.
 \qquad\text{(2-11)}
 ```
 
 ```math
-G_{\mathrm{TU}}=\frac{1}{\mathrm{sz}^2}
-\sum_{i=1}^{\mathrm{sz}-2}\sum_{j=1}^{\mathrm{sz}-2}
-\left(\left|G_x^{\mathrm{orig}}\right|+\left|G_y^{\mathrm{orig}}\right|\right).
+G_{\mathrm{TU}}=\frac{1}{\mathrm{sz}^2}\sum_{i=1}^{\mathrm{sz}-2}\sum_{j=1}^{\mathrm{sz}-2}\left(\left|G_x^{\mathrm{orig}}\right|+\left|G_y^{\mathrm{orig}}\right|\right)
 \qquad\text{(2-12)}
 ```
 
@@ -282,26 +266,24 @@ Gradients are computed only inside the block, but energy is normalized by the fu
 The original, base, and adaptive coefficient-group (CG) zeroing thresholds are:
 
 ```math
-T_{\mathrm{CG}}=\frac{9\times2^{\mathrm{sft}}}{4}
-=9\times2^{\mathrm{sft}-2}.
+T_{\mathrm{CG}}=\frac{9\times2^{\mathrm{sft}}}{4}=9\times2^{\mathrm{sft}-2}
 \qquad\text{(2-13)}
 ```
 
 ```math
-T_{\mathrm{base}}=T_{\mathrm{CG}}=9\times2^{\mathrm{sft}-2}.
+T_{\mathrm{base}}=T_{\mathrm{CG}}=9\times2^{\mathrm{sft}-2}
 \qquad\text{(2-14)}
 ```
 
 ```math
-T_{\mathrm{adaptive}}=
-\begin{cases}
-\max\{T_{\mathrm{base}}/2,1\},&G_{\mathrm{TU}}>2,\\
-T_{\mathrm{base}},&G_{\mathrm{TU}}\le2.
-\end{cases}
+T_{\mathrm{adaptive}}=\left\{\begin{gathered}
+\max\left\{\frac{T_{\mathrm{base}}}{2},1\right\},G_{\mathrm{TU}}>2\\
+T_{\mathrm{base}},G_{\mathrm{TU}}\le2
+\end{gathered}\right.
 \qquad\text{(2-15)}
 ```
 
-Here $`\mathrm{sft}=\mathrm{LEVEL\_SHIFT\_TABLE}[\mathrm{sz}/8]+q`$, with table indexing interpreted using the encoder's integer arithmetic. The code uses bit shifts for threshold scaling and integer truncation; `zero_multiplier=9`, `zero_shift=2`, and `zero_reduction_shift=1` give the defaults above. This threshold only controls coefficient-group zeroing; candidate quantization levels are still compared by cost.
+Here $`\mathrm{sft}=\mathrm{LEVEL\_SHIFT\_TABLE}[\mathrm{sz}/8]+\mathrm{qpd6}`$, with table indexing interpreted using the encoder's integer arithmetic. The code uses bit shifts for threshold scaling and integer truncation; `zero_multiplier=9`, `zero_shift=2`, and `zero_reduction_shift=1` give the defaults above. This threshold only controls coefficient-group zeroing; candidate quantization levels are still compared by cost.
 
 Implementation: [prior extraction entry point](hevc_prior/runner.py), [encoder](hevc_prior/codec.c).
 
@@ -349,57 +331,56 @@ Scale interpolation falls back to nearest neighbors when centers are insufficien
 
 #### Thesis Equations: Sparse Representation and K-SVD Updates
 
-Flatten $`m`$ image patches into column vectors to form $`X=[x_1,\ldots,x_m]\in\mathbb{R}^{d\times m}`$. Let $`D\in\mathbb{R}^{d\times K}`$ be the dictionary and $`A=[a_1,\ldots,a_m]\in\mathbb{R}^{K\times m}`$ the sparse coefficients. Here $`d`$ denotes the patch-vector dimension called $`n`$ in the thesis, to distinguish it from the number of scales below. The dictionary-learning objective is:
+Flatten $`m`$ image patches into column vectors to form $`X=[x_1,x_2,\cdots,x_m]\in\mathbb{R}^{n\times m}`$. Let $`D\in\mathbb{R}^{n\times k}`$ be the dictionary and $`A=[a_1,a_2,\cdots,a_m]\in\mathbb{R}^{k\times m}`$ the sparse coefficients. Here $`n`$ is the patch-vector dimension and $`k`$ is the dictionary atom count; the thesis reuses $`n`$ for the number of scales in Eq. (3-10). The dictionary-learning objective is:
 
 ```math
-\min_{D,A}\|X-DA\|_F^2,
-\qquad \mathrm{s.t.}\quad \|a_i\|_0\le L,\quad i=1,\ldots,m.
+\underset{D,A}{\min}\|X-DA\|_F^2\quad\mathrm{s.t.}\quad\left\{\begin{gathered}
+\|a_i\|_0\le L\\
+i=1,2,\cdots,m
+\end{gathered}\right.
 \qquad\text{(3-1)}
 ```
 
 $`\|\cdot\|_F`$ is the Frobenius norm, $`\|\cdot\|_0`$ counts nonzero elements, and $`L`$ is the maximum number of atoms allowed per patch. Dictionary columns are initially normalized to unit L2 norm. The thesis gives the following atom selection and residual update at step $`\ell`$:
 
 ```math
-I_\ell=\underset{j}{\mathrm{argmax}}
-\left\{d_j^{\mathsf T}r_{\ell-1}\right\}.
+I_\ell=\underset{\mathrm{j}}{\mathrm{argmax}}\left\{d_j^{\mathrm{T}}r_{\ell-1}\right\}
 \qquad\text{(3-2)}
 ```
 
 ```math
-r_\ell=r_{\ell-1}-a_{I_\ell}d_{I_\ell}.
+r_\ell=r_{\ell-1}-a_{I_\ell}d_{I_\ell}
 \qquad\text{(3-3)}
 ```
 
-Here $`r_0=x_i`$. **Implementation supplement:** The current `sparse_encode.m` maximizes the **absolute value** of the correlation among unselected atoms, sets $`a_{I_\ell}=d_{I_\ell}^{\mathsf T}r_{\ell-1}`$, and updates the residual using Eq. (3-3). It does not jointly re-estimate selected coefficients by least squares. It follows the thesis's successive correlation selection and residual update rule, and should be distinguished from strict orthogonal matching pursuit. It stops after selecting $`L`$ atoms or when $`\|r_\ell\|_2\le\varepsilon`$. Defaults are $`K=512`$, $`L=\mathrm{round}(0.1K)=51`$, and $`\varepsilon=46225`$, compared directly in the current input's numerical units.
+Here $`r_0=x_i`$. **Implementation supplement:** The current `sparse_encode.m` maximizes the **absolute value** of the correlation among unselected atoms, sets $`a_{I_\ell}=d_{I_\ell}^{\mathrm{T}}r_{\ell-1}`$, and updates the residual using Eq. (3-3). It does not jointly re-estimate selected coefficients by least squares. It follows the thesis's successive correlation selection and residual update rule, and should be distinguished from strict orthogonal matching pursuit. It stops after selecting $`L`$ atoms or when $`\|r_\ell\|_2\le\varepsilon`$. Defaults are $`k=512`$, $`L=\mathrm{round}(0.1k)=51`$, and $`\varepsilon=46225`$, compared directly in the current input's numerical units.
 
 For dictionary atom $`t`$, take the active sample set $`\mathcal{I}_t=\{i:A(t,i)\ne0\}`$, and add back that atom's contribution to construct the local residual:
 
 ```math
-R_t=X(:,\mathcal{I}_t)-DA(:,\mathcal{I}_t)
-+d_tA(t,\mathcal{I}_t).
+R_t=X(:,\mathcal{I}_t)-DA(:,\mathcal{I}_t)+d_tA(t,\mathcal{I}_t)
 \qquad\text{(3-4)}
 ```
 
 ```math
-R_t\approx U\Sigma V^{\mathsf T}.
+R_t\approx U\Sigma V^{\mathrm{T}}
 \qquad\text{(3-5)}
 ```
 
 ```math
-\begin{cases}
-d_t\leftarrow U(:,1),\\
-A(t,\mathcal{I}_t)\leftarrow\Sigma(1,1)V(:,1)^{\mathsf T}.
-\end{cases}
+\left\{\begin{gathered}
+d_t\leftarrow U(:,1)\\
+A(t,\mathcal{I}_t)\leftarrow\Sigma(1,1)V(:,1)^{\mathrm{T}}
+\end{gathered}\right\}
 \qquad\text{(3-6)}
 ```
 
-The code computes this rank-one update with `svds(local,1)`. If an atom has no active samples, the current implementation uses all samples as its update set. After each round, it recomputes sparse codes and $`e_k=\|X-DA\|_F/\sqrt{dm}`$. It stops when $`|e_k-e_{k-1}|<0.0009`$ or after 10 rounds, with initial comparison value $`e_0=0`$.
+The code computes this rank-one update with `svds(local,1)`. If an atom has no active samples, the current implementation uses all samples as its update set. After each round, it recomputes sparse codes and $`e_k=\frac{\|X-DA\|_F}{\sqrt{\mathstrut nm}}`$. It stops when $`|e_k-e_{k-1}|<0.0009`$ or after 10 rounds, with initial comparison value $`e_0=0`$.
 
-Let reconstructed patch $`q`$ be $`\hat{x}_q`$ with weight window $`w_q`$. In full-image coordinates, summing only over patches covering the current pixel gives:
+Let reconstructed patch $`q`$ be $`x_q`$ with weight window $`w_q`$. In full-image coordinates, summing only over patches covering the current pixel gives:
 
 ```math
-\hat{I}(i,j)=
-\frac{\sum_q w_q(i,j)\hat{x}_q(i,j)}{\sum_q w_q(i,j)}.
+\hat{I}(i,j)=\frac{\sum_q w_q(i,j)\hat{x}_q(i,j)}{\sum_q w_q(i,j)}
 \qquad\text{(3-7)}
 ```
 
@@ -410,42 +391,36 @@ Let reconstructed patch $`q`$ be $`\hat{x}_q`$ with weight window $`w_q`$. In fu
 Suppose pixel $`p`$ lies inside a triangle formed by three TU centers, with vertex scales $`s_1,s_2,s_3`$ and barycentric coordinates $`\lambda_1,\lambda_2,\lambda_3`$. Then:
 
 ```math
-\begin{cases}
-s(p)=\lambda_1s_1+\lambda_2s_2+\lambda_3s_3,\\
-\lambda_1+\lambda_2+\lambda_3=1.
-\end{cases}
+\left\{\begin{gathered}
+s(p)=\lambda_1s_1+\lambda_2s_2+\lambda_3s_3\\
+\lambda_1+\lambda_2+\lambda_3=1
+\end{gathered}\right.
 \qquad\text{(3-8)}
 ```
 
-Inside the triangle, $`\lambda_k\ge0`$. Nearest neighbors fill points outside the convex hull; insufficient or collinear centers trigger a full nearest-neighbor fallback. Let $`\bar{g}_{\mathrm{PU}}(p)`$ be the mean grayscale of the PU containing the pixel, and $`g_{\max}`$ the largest mean grayscale among all PUs. The enlarged scale is:
+Inside the triangle, $`\lambda_k\ge0`$. Nearest neighbors fill points outside the convex hull; insufficient or collinear centers trigger a full nearest-neighbor fallback. Let $`\bar{g}_{\mathrm{PU}}(p)`$ be the mean grayscale of the PU containing the pixel, and $`g_{\mathrm{max}}`$ the largest mean grayscale among all PUs. The enlarged scale is:
 
 ```math
-s'(p)=s(p)\left[
-1+\alpha\left(1-\frac{\bar{g}_{\mathrm{PU}}(p)}{g_{\max}}\right)^\gamma
-\left(\frac{32}{s(p)}-1\right)
-\right].
+s'(p)=s(p)\left[1+\alpha\left(1-\frac{\bar{g}_{\mathrm{PU}}(p)}{g_{\mathrm{max}}}\right)^\gamma\left(\frac{32}{s(p)}-1\right)\right]
 \qquad\text{(3-9)}
 ```
 
-Defaults are $`\alpha=0.5`$ and $`\gamma=6`$, with 32 corresponding to `structure_limit`. Dark regions receive greater enlargement. The code uses $`\max(g_{\max},\mathrm{eps})`$ to avoid division by zero for all-black images. A mean filter with radius 12 and a $`25\times25`$ window follows. To retain the thesis notation, $`s'`$ in Eq. (3-10) denotes the scale map after this smoothing step.
+Defaults are $`\alpha=0.5`$ and $`\gamma=6`$, with 32 corresponding to `structure_limit`. Dark regions receive greater enlargement. The code uses $`\max\{g_{\mathrm{max}},\mathrm{eps}\}`$ to avoid division by zero for all-black images. A mean filter with radius 12 and a $`25\times25`$ window follows. To retain the thesis notation, $`s'`$ in Eq. (3-10) denotes the scale map after this smoothing step.
 
-The thesis normalizes continuous scales to $`[4-b_0,4n]`$. Here the original lower-bound adjustment parameter $`b`$ is written as $`b_0`$ to distinguish it from the block side length $`b`$ below:
+The thesis normalizes continuous scales to $`[4-b,4n]`$. Here $`b`$ is the lower-bound adjustment parameter; the thesis later reuses $`b`$ for the block side length:
 
 ```math
-\tilde{s}(p)=(4-b_0)+
-\frac{s'(p)-s'_{\min}}{s'_{\max}-s'_{\min}}
-\left(4n-(4-b_0)\right).
+\tilde{s}(p)=(4-b)+\frac{s'(p)-s'_{\mathrm{min}}}{s'_{\mathrm{max}}-s'_{\mathrm{min}}}\left(4n-(4-b)\right)
 \qquad\text{(3-10)}
 ```
 
-**Implementation supplement:** The code specifies the lower bound $`a`$ directly through `lower_bound`, and takes the maximum of the selected scale set $`\mathcal{B}`$ as the upper bound. The default $`a=0`$ corresponds to $`b_0=4`$ in the original equation:
+**Implementation supplement:** The code specifies the lower bound $`a`$ directly through `lower_bound`, and takes the maximum of the selected scale set $`\mathcal{B}`$ as the upper bound. The default $`a=0`$ corresponds to $`b=4`$ in the original equation:
 
 ```math
-\tilde{s}(p)=a+
-\frac{s'(p)-s'_{\min}}{s'_{\max}-s'_{\min}}(\max\mathcal{B}-a),
-\qquad
-s_{\mathrm{disc}}(p)=\underset{b\in\mathcal{B}}{\mathrm{argmin}}
-\left|\tilde{s}(p)-b\right|.
+\begin{gathered}
+\tilde{s}(p)=a+\frac{s'(p)-s'_{\mathrm{min}}}{s'_{\mathrm{max}}-s'_{\mathrm{min}}}\left(\mathrm{max}\,\mathcal{B}-a\right)\\
+s_{\mathrm{disc}}(p)=\underset{b\in\mathcal{B}}{\mathrm{argmin}}\left|\tilde{s}(p)-b\right|
+\end{gathered}
 ```
 
 For a nearly constant scale map, both continuous and discrete maps are set to $`\min\mathcal{B}`$. Ties between nearest scales use the smaller value appearing first in the configuration. Standalone denoising uses $`n=6`$, $`\mathcal{B}=\{4,8,12,16,20,24\}`$; denoising before network inference uses $`n=3`$, $`\mathcal{B}=\{4,8,12\}`$.
@@ -453,19 +428,18 @@ For a nearly constant scale map, both continuous and discrete maps are set to $`
 Let $`X_b,D_b,A_b`$ denote the training sample matrix, dictionary, and sparse coefficients for block side length $`b`$. Each active scale is solved independently:
 
 ```math
-\min_{D_b,A_b}\|X_b-D_bA_b\|_F^2,
-\qquad \mathrm{s.t.}\quad\|a_i^{(b)}\|_0\le L.
+\underset{D_b,A_b}{\min}\|X_b-D_bA_b\|_F^2\quad\mathrm{s.t.}\quad\|a_i^{(b)}\|_0\le L
 \qquad\text{(3-11)}
 ```
 
 Each patch has vector dimension $`b^2`$. Training samples come from the image with added synthetic noise, while patches for final encoding come from the current input image. Reconstructed patches are fused using Eq. (3-7), with a Gaussian window for adaptive blocks:
 
 ```math
-w_b(i,j)=\exp\left[-\frac{(i-c)^2+(j-c)^2}{2(\eta b)^2}\right].
+w_b(i,j)=\mathrm{e}^{-\frac{(i-c)^2+(j-c)^2}{2(\eta b)^2}}
 \qquad\text{(3-12)}
 ```
 
-Local coordinates are $`i,j\in\{1,\ldots,b\}`$, $`c=(b+1)/2`$, and $`\eta=0.5`$ corresponds to `fusion_sigma_ratio`. Fixed-block comparisons use $`w_b(i,j)=1`$ and produce a separate image for each fixed scale.
+Local coordinates are $`i,j\in\{1,2,\cdots,b\}`$, $`c=(b+1)/2`$, and $`\eta=0.5`$ corresponds to `fusion_sigma_ratio`. Fixed-block comparisons use $`w_b(i,j)=1`$ and produce a separate image for each fixed scale.
 
 Implementation: [batch denoising](block_ksvd/batch_denoise.m), [scale maps](block_ksvd/scale_map.m), [dictionary learning](block_ksvd/dictionary_learning.m), [sparse coding](block_ksvd/sparse_encode.m), [reconstruction and fusion](block_ksvd/reconstruct_image.m).
 
@@ -502,32 +476,28 @@ Defaults are batch size 1, learning rate 0.0002, and Adam parameters `(0.5,0.999
 
 #### Implementation Supplement: Inputs, Training Losses, and Learning Rate
 
-For 8-bit grayscale value $`I`$, network input normalization is $`x=I/127.5-1`$. Let the original 32-beamline training input be $`x`$, its paired 128-beamline reference be $`y`$, the generator be $`G`$, and the conditional discriminator be $`D`$. With $`\langle\cdot\rangle`$ denoting a mean over the batch and relevant pixel or discriminator-map elements, the current training objective is:
+For 8-bit grayscale value $`I`$, network input normalization is $`x=\frac{I}{127.5}-1`$. Let the original 32-beamline training input be $`x`$, its paired 128-beamline reference be $`y`$, the generator be $`G(\cdot)`$, and the conditional discriminator be $`D(\cdot)`$. With $`\langle\cdot\rangle`$ denoting a mean over the batch and relevant pixel or discriminator-map elements, the current training objective is:
 
 ```math
-\begin{aligned}
-\hat{y}&=G(x),\\
-\mathcal{L}_1&=\left\langle|\hat{y}-y|\right\rangle,\\
-\mathcal{L}_{\mathrm{adv}}&=
-\left\langle\left(D([x;\hat{y}])-1\right)^2\right\rangle,\\
-\mathcal{L}_G&=10\mathcal{L}_1+\mathcal{L}_{\mathrm{adv}},\\
-\mathcal{L}_D&=\frac12\left[
-\left\langle\left(D([x;y])-1\right)^2\right\rangle+
-\left\langle D(\mathcal{R}([x;\mathrm{stopgrad}(\hat{y})]))^2\right\rangle
-\right].
-\end{aligned}
+\begin{gathered}
+\hat{y}=G(x)\\
+\mathcal{L}_1=\left\langle\left|\hat{y}-y\right|\right\rangle\\
+\mathcal{L}_{\mathrm{adv}}=\left\langle\left(D([x;\hat{y}])-1\right)^2\right\rangle\\
+\mathcal{L}_G=10\mathcal{L}_1+\mathcal{L}_{\mathrm{adv}}\\
+\mathcal{L}_D=\frac12\left[\left\langle\left(D([x;y])-1\right)^2\right\rangle+\left\langle D\left(\mathcal{R}\left([x;\mathrm{stopgrad}(\hat{y})]\right)\right)^2\right\rangle\right]
+\end{gathered}
 ```
 
-$`[\cdot;\cdot]`$ denotes channel concatenation. $`\mathcal{R}`$ is a generated-pair replay pool of capacity 50 with a historical replacement probability of 0.5. `stopgrad` prevents gradients from reaching the generator during discriminator updates. Loss weights are configured by `l1_weight` and `adversarial_weight`; the equations show their defaults. The code also scales the discriminator loss by `adversarial_weight`; setting it to 0 skips adversarial updates. Validation computes only $`\mathcal{L}_1`$.
+$`[\cdot;\cdot]`$ denotes channel concatenation. $`\mathcal{R}(\cdot)`$ is a generated-pair replay pool of capacity 50 with a historical replacement probability of 0.5. $`\mathrm{stopgrad}(\cdot)`$ prevents gradients from reaching the generator during discriminator updates. Loss weights are configured by `l1_weight` and `adversarial_weight`; the equations show their defaults. The code also scales the discriminator loss by `adversarial_weight`; setting it to 0 skips adversarial updates. Validation computes only $`\mathcal{L}_1`$.
 
 With epoch $`e`$ starting at 1, constant-rate phase $`E_c=30`$, decay phase $`E_d=30`$, and initial learning rate $`r_0=0.0002`$, the code uses:
 
 ```math
-r(e)=r_0\left(1-\frac{\max(0,e-E_c)}{E_d+1}\right),
-\qquad e=1,\ldots,E_c+E_d.
+r(e)=r_0\left(1-\frac{\max\{0,e-E_c\}}{E_d+1}\right)
+\qquad e=1,2,\cdots,E_c+E_d
 ```
 
-The final epoch therefore uses learning rate $`r_0/31`$. By default, Adam with $`\beta_1=0.5`$ and $`\beta_2=0.999`$ alternates generator and discriminator updates.
+The final epoch therefore uses learning rate $`\frac{r_0}{31}`$. By default, Adam with $`\beta_1=0.5`$ and $`\beta_2=0.999`$ alternates generator and discriminator updates.
 
 Implementation: [paired data and splits](usr_mamba/dataset.py), [training and validation](usr_mamba/training.py).
 
@@ -559,67 +529,67 @@ Inference uses evaluation mode with gradients disabled. Input width and height m
 
 #### Thesis Equations: Encoding, Dual-Domain State Space, and Decoding
 
-Let $`I_{\mathrm{LR}}`$ be the low-resolution ultrasound input (low beamline count), $`I_{\mathrm{HR}}`$ the high-resolution reference (high beamline count), $`U`$ the input size transformation, $`E`$ the encoder, $`f_1`$ the bottleneck input, and $`\{s_l\}_{l=1}^{L}`$ the skip features:
+Let $`I_{\mathrm{LR}}`$ be the low-resolution ultrasound input (low beamline count), $`I_{\mathrm{HR}}`$ the high-resolution reference (high beamline count), $`U(\cdot)`$ the input size transformation, $`E(\cdot)`$ the encoder, $`f_1`$ the bottleneck input, and $`\{s_l\}_{l=1}^{L}`$ the skip features:
 
 ```math
-\begin{cases}
-X=U(I_{\mathrm{LR}}),\\
-\left(f_1,\{s_l\}_{l=1}^{L}\right)=E(X).
-\end{cases}
+\left\{\begin{gathered}
+X=U(I_{\mathrm{LR}})\\
+\left(f_1,\{s_l\}_{l=1}^L\right)=E(X)
+\end{gathered}\right.
 \qquad\text{(4-1)}
 ```
 
-The thesis permits same-size inputs when preprocessing has already produced the target dimensions. This project's 32-beamline/128-beamline images share the same pixel grid, so $`U`$ is an identity size mapping here; grayscale is normalized separately as described above.
+The thesis also permits $`X=I_{\mathrm{LR}}^{\mathrm{up}}`$ when preprocessing has already produced the target dimensions. This project's 32-beamline/128-beamline images share the same pixel grid, so $`U`$ is an identity size mapping here; grayscale is normalized separately as described above.
 
 With $`J=9`$ bottleneck stages and dual-domain module positions $`S=\{1,5,9\}`$, the thesis defines stage updates as:
 
 ```math
-\begin{cases}
-\tilde{f}_j=
-\begin{cases}
-\mathcal{D}_j(f_j),&j\in S,\\
-f_j,&j\notin S,
-\end{cases}\\
-f_{j+1}=\mathrm{rCNN}_j(\tilde{f}_j),\quad j=1,\ldots,J.
-\end{cases}
+\left\{\begin{gathered}
+\tilde{f}_j=\left\{\begin{gathered}
+\mathcal{D}_j(f_j),j\in S\\
+f_j,j\notin S
+\end{gathered}\right.\\
+\left\{\begin{gathered}
+f_{j+1}=\mathrm{rCNN}_j(\tilde{f}_j)\\
+j=1,2,\cdots,J
+\end{gathered}\right.
+\end{gathered}\right.
 \qquad\text{(4-2)}
 ```
 
-$`\mathcal{D}_j`$ is the dual-domain SSM module and $`\mathrm{rCNN}_j`$ is residual convolutional refinement. Let $`\mathcal{F}`$ and $`\mathcal{F}^{-1}`$ be the Fourier transform and its inverse. $`\mathcal{R}`$ concatenates real and imaginary spectrum components along channels, and $`\mathcal{R}^{-1}`$ recombines them into complex values. Then:
+$`\mathcal{D}_j(\cdot)`$ is the dual-domain SSM module and $`\mathrm{rCNN}_j(\cdot)`$ is residual convolutional refinement. Let $`\mathcal{F}(\cdot)`$ and $`\mathcal{F}^{-1}(\cdot)`$ be the Fourier transform and its inverse. $`\mathcal{R}(\cdot)`$ concatenates real and imaginary spectrum components along channels, and $`\mathcal{R}^{-1}(\cdot)`$ recombines them into complex values. Then:
 
 ```math
-\begin{cases}
-u_I=\mathcal{M}_{I,j}(f_j),\\
-u_F=\mathcal{F}^{-1}\!\left(
-\mathcal{R}^{-1}\!\left(\mathcal{M}_{F,j}\!\left(
-\mathcal{R}(\mathcal{F}(f_j))\right)\right)\right),\\
-\mathcal{D}_j(f_j)=P_j([u_I;u_F]).
-\end{cases}
+\left\{\begin{gathered}
+u_I=\mathcal{M}_{I,j}(f_j)\\
+u_F=\mathcal{F}^{-1}\left(\mathcal{R}^{-1}\mathcal{M}_{F,j}\left(\mathcal{R}\left(\mathcal{F}(f_j)\right)\right)\right)\\
+\mathcal{D}_j(f_j)=P_j([u_I;u_F])
+\end{gathered}\right.
 \qquad\text{(4-3)}
 ```
 
-Here $`\mathcal{M}_{I,j}`$ and $`\mathcal{M}_{F,j}`$ are the image-domain and Fourier-domain branches, and $`P_j`$ is a channel projection. The complex rearrangement $`\mathcal{R}`$ here is defined separately from the training replay-pool notation. The code centers the 2D FFT with `fftshift`, applies `ifftshift` before inversion, and takes the real part of the inverse result. Spatial sequences have $`C`$ channels; frequency real/imaginary sequences have $`2C`$ channels.
+Here $`\mathcal{M}_{I,j}(\cdot)`$ and $`\mathcal{M}_{F,j}(\cdot)`$ are the image-domain and Fourier-domain branches, and $`P_j(\cdot)`$ is a channel projection. The complex rearrangement $`\mathcal{R}(\cdot)`$ here is defined separately from the training replay-pool notation. The code centers the 2D FFT with `fftshift`, applies `ifftshift` before inversion, and takes the real part of the inverse result. Spatial sequences have $`C`$ channels; frequency real/imaginary sequences have $`2C`$ channels.
 
 For either branch input $`q`$, the thesis describes branch computation using channel expansion, local convolution, a gated SSM, and channel mixing:
 
 ```math
-\begin{cases}
-g=\sigma(\mathrm{Lin}_{\beta}(q)),\\
-e=\sigma(\mathrm{DWConv}(\mathrm{Lin}_{\beta}(q))),\\
-M=\mathrm{SSM}_{\theta}(e),\\
-e_{\mathrm{SSM}}=q+\mathrm{Lin}_{1/\beta}(g\odot M),\\
-\mathcal{M}_{*,j}(q)=\mathrm{cmConv}(e_{\mathrm{SSM}})
-+\mathrm{Conv}(e_{\mathrm{SSM}}),\quad *\in\{I,F\}.
-\end{cases}
+\left\{\begin{gathered}
+g=\sigma(\mathrm{Lin}_\beta(q))\\
+e=\sigma(\mathrm{DWConv}(\mathrm{Lin}_\beta(q)))\\
+M=\mathrm{SSM}_\theta(e)\\
+e_{\mathrm{SSM}}=q+\mathrm{Lin}_{1/\beta}(g\odot M)\\
+\mathcal{M}_{*,j}(q)=\mathrm{cmConv}(e_{\mathrm{SSM}})+\mathrm{Conv}(e_{\mathrm{SSM}})\\
+*\in\{I,F\}
+\end{gathered}\right.
 \qquad\text{(4-4)}
 ```
 
-$`\mathrm{Lin}_{\beta}`$ and $`\mathrm{Lin}_{1/\beta}`$ expand and compress channels, respectively. $`\mathrm{DWConv}`$ is depthwise convolution, $`\sigma`$ an activation, $`\odot`$ elementwise multiplication, and $`\mathrm{cmConv}`$ channel-mixing convolution. The image-domain branch uses $`q=f_j`$; the Fourier-domain branch uses $`q=\mathcal{R}(\mathcal{F}(f_j))`$. **Implementation correspondence:** Eq. (4-4) retains the thesis's module-level expression. Each current branch calls `LayerNorm` and `mamba_ssm.Mamba`; `DualDomainState`, `FeatureFusion`, and `ResidualConvolution` then perform dual-domain fusion, input concatenation/fusion, and residual refinement. The code does not explicitly instantiate every independent layer shown in the equation.
+$`\mathrm{Lin}_{\beta}(\cdot)`$ and $`\mathrm{Lin}_{1/\beta}(\cdot)`$ expand and compress channels, respectively. $`\mathrm{DWConv}(\cdot)`$ is depthwise convolution, $`\sigma(\cdot)`$ an activation, $`\odot`$ elementwise multiplication, $`\mathrm{cmConv}(\cdot)`$ channel-mixing convolution, and $`\mathrm{SSM}_{\theta}(\cdot)`$ the state space operator based on angular-uniform scanning. The image-domain branch uses $`q=f_j`$; the Fourier-domain branch uses $`q=\mathcal{R}(\mathcal{F}(f_j))`$. **Implementation correspondence:** Eq. (4-4) retains the thesis's module-level expression. Each current branch calls `LayerNorm` and `mamba_ssm.Mamba`; `DualDomainState`, `FeatureFusion`, and `ResidualConvolution` then perform dual-domain fusion, input concatenation/fusion, and residual refinement. The code does not explicitly instantiate every independent layer shown in the equation.
 
-Decoder $`D`$ combines the bottleneck output with skip features:
+Decoder $`D(\cdot)`$ combines the bottleneck output with skip features:
 
 ```math
-\hat{I}_{\mathrm{HR}}=D\left(f_{J+1},\{s_l\}_{l=1}^{L}\right).
+\hat{I}_{\mathrm{HR}}=D\left(f_{J+1},\{s_l\}_{l=1}^L\right)
 \qquad\text{(4-5)}
 ```
 
@@ -627,15 +597,15 @@ Here $`D`$ denotes the decoder, separately from the discriminator in the trainin
 
 #### Thesis Equations: Scan Sequence and State Updates
 
-For feature-map size $`H\times W`$, the scan path $`p(n)=(h[n],w[n])`$ is a permutation of 2D positions, with $`n=1,\ldots,HW`$ and channel index $`c`$. Serialization, state recurrence, and inverse-permutation restoration are:
+For feature-map size $`H\times W`$, the scan path $`p(n)=(h[n],w[n])`$ is a permutation of 2D positions, with $`n=1,2,\cdots,H\times W`$ and channel index $`c`$. Serialization, state recurrence, and inverse-permutation restoration are:
 
 ```math
-\begin{cases}
-z_{\mathrm{in}}[n,c]=e[p(n),c],\\
-\ell[n,c]=\bar{A}\ell[n-1,c]+\bar{B}[n]z_{\mathrm{in}}[n,c],\\
-z_{\mathrm{out}}[n,c]=\bar{C}[n]\ell[n,c],\\
-M[p(n),c]=z_{\mathrm{out}}[n,c].
-\end{cases}
+\left\{\begin{gathered}
+z_{\mathrm{in}}[n,c]=e[p(n),c]\\
+\ell[n,c]=\bar{A}\ell[n-1,c]+\bar{B}[n]z_{\mathrm{in}}[n,c]\\
+z_{\mathrm{out}}[n,c]=\bar{C}[n]\ell[n,c]\\
+M[p(n),c]=z_{\mathrm{out}}[n,c]
+\end{gathered}\right.
 \qquad\text{(4-6)}
 ```
 
@@ -686,12 +656,12 @@ Metrics requiring a missing scale map, ROI, or TU / mask remain missing (NaN). L
 Let the evaluated image have $`N`$ pixels, mean grayscale $`\mu`$, and sample variance $`\sigma^2=\frac{1}{N-1}\sum_p(I(p)-\mu)^2`$. Chapter 3 defines whole-image CNR and ENL as:
 
 ```math
-\mathrm{CNR}=\frac{\mu}{\sigma}.
+\mathrm{CNR}=\frac{\mu}{\sigma}
 \qquad\text{(3-13)}
 ```
 
 ```math
-\mathrm{ENL}=\frac{\mu^2}{\mathrm{Var}(I)}.
+\mathrm{ENL}=\frac{\mu^2}{\mathrm{Var}}
 \qquad\text{(3-14)}
 ```
 
@@ -700,47 +670,38 @@ The current CSV fields are `global_cnr` and `enl`, both computed over the entire
 Let $`\nabla I`$ denote Sobel gradient magnitude. The edge preservation index before and after denoising is:
 
 ```math
-\mathrm{EPI}=\mathrm{corr}
-\left(\nabla I_{\mathrm{orig}},\nabla I_{\mathrm{den}}\right).
+\mathrm{EPI}=\mathrm{corr}\left(\nabla I_{\mathrm{orig}},\nabla I_{\mathrm{den}}\right)
 \qquad\text{(3-15)}
 ```
 
 `evaluate` computes this correlation between the manifest's `reference` and `result`. If either gradient map has standard deviation below `eps`, the code defines EPI as 1; this case should not be interpreted as sufficient evidence of edge preservation.
 
-Let $`S_{\mathrm{GM}}`$ and $`S_{\mathrm{PC}}`$ be gradient-magnitude and phase-congruency similarity maps, and $`\mathrm{PC}_m`$ the pixelwise maximum of the two phase-congruency maps. FSIM is defined as:
+Let $`S_{\mathrm{GM}}`$ and $`S_{\mathrm{PC}}`$ be gradient-magnitude and phase-congruency similarity maps, and $`\mathrm{PC}_{\mathrm{m}}`$ the pixelwise maximum of the two phase-congruency maps. FSIM is defined as:
 
 ```math
-\mathrm{FSIM}=
-\frac{\sum_p S_{\mathrm{GM}}(p)S_{\mathrm{PC}}(p)\mathrm{PC}_m(p)}
-{\sum_p\mathrm{PC}_m(p)}.
+\mathrm{FSIM}=\frac{\sum S_{\mathrm{GM}}S_{\mathrm{PC}}\mathrm{PC}_{\mathrm{m}}}{\sum\mathrm{PC}_{\mathrm{m}}}
 \qquad\text{(3-16)}
 ```
 
 **Implementation supplement:** The program uses Scharr gradient magnitudes $`G_1,G_2`$ and multiscale LoG responses $`P_1,P_2`$ in this structure, where $`P`$ approximates the phase response:
 
 ```math
-\begin{aligned}
-P(I)&=\frac{1}{|\mathcal{S}|}
-\sum_{s\in\mathcal{S}}|\mathrm{LoG}_s*I|,
-\quad\mathcal{S}=\{1,2,4\},\\
-S_{\mathrm{GM}}&=\frac{2G_1G_2+T_G}{G_1^2+G_2^2+T_G},
-\quad T_G=0.0026,\\
-S_{\mathrm{PC}}&=\frac{2P_1P_2+T_P}{P_1^2+P_2^2+T_P},
-\quad T_P=0.85,\\
-\mathrm{PC}_m&=\max(P_1,P_2).
-\end{aligned}
+\begin{gathered}
+P(I)=\frac{1}{|\mathcal{S}|}\sum_{s\in\mathcal{S}}|\mathrm{LoG}_s*I|\quad\mathcal{S}=\{1,2,4\}\\
+S_{\mathrm{GM}}=\frac{2G_1G_2+T_G}{G_1^2+G_2^2+T_G}\quad T_G=0.0026\\
+S_{\mathrm{PC}}=\frac{2P_1P_2+T_P}{P_1^2+P_2^2+T_P}\quad T_P=0.85\\
+\mathrm{PC}_{\mathrm{m}}=\max\{P_1,P_2\}
+\end{gathered}
 ```
 
 $`*`$ denotes convolution; other products, squares, and maxima are pixelwise, with image grayscale in `[0,1]`. This LoG approximation gives FSIM a different numerical definition from a general phase-congruency implementation.
 
 #### Thesis Equations: Point Responses and Scale-Region Evaluation
 
-Let $`f(t)`$ be a horizontal or vertical 1D grayscale profile extracted after ROI centroid correction, with half-maximum intersections $`t_L,t_R`$. Then:
+Let $`f(t)`$ be a horizontal or vertical 1D grayscale profile extracted after ROI centroid correction, with half-maximum intersections $`t_{\mathrm{L}},t_{\mathrm{R}}`$. Then:
 
 ```math
-\mathrm{FWHM}=t_R-t_L,
-\qquad \mathrm{s.t.}\quad
-f(t_L)=f(t_R)=\frac12\max_t f(t).
+\mathrm{FWHM}=t_{\mathrm{R}}-t_{\mathrm{L}}\quad\mathrm{s.t.}\quad f(t_{\mathrm{L}})=f(t_{\mathrm{R}})=\frac12\max f(t)
 \qquad\text{(3-17)}
 ```
 
@@ -749,9 +710,7 @@ The code first computes a grayscale-weighted centroid from ROI pixels at least 9
 For region $`\Omega_b`$ corresponding to block-size class $`b`$, a pixelwise metric map $`Q(p)`$, and Gaussian weights $`w_b(p)`$ consistent with reconstruction, the thesis gives the regional mean evaluation as:
 
 ```math
-\bar{Q}_b=
-\frac{\sum_{p\in\Omega_b}w_b(p)Q(p)}
-{\sum_{p\in\Omega_b}w_b(p)}.
+\bar{Q}_b=\frac{\sum_{p\in\Omega_b}w_b(p)Q(p)}{\sum_{p\in\Omega_b}w_b(p)}
 \qquad\text{(3-18)}
 ```
 
@@ -762,29 +721,28 @@ This equation analyzes local contributions by scale in the thesis. The current `
 Chapter 4 automatically partitions target, background, and noise regions using continuous scale map $`\tilde{s}`$, with the following thresholds and calculation:
 
 ```math
-\begin{aligned}
-\Omega_t&=\{p:0\le\tilde{s}(p)<4\},\\
-\Omega_b&=\{p:8<\tilde{s}(p)\le12\},\\
-\Omega_n&=\{p:0\le\tilde{s}(p)\le12\},\\
-\mathrm{CNR}_{\mathrm{region}}&=
-\frac{|\mu_{\Omega_t}-\mu_{\Omega_b}|}
-{\max(\sigma_{\Omega_n},\mathrm{eps})}.
-\end{aligned}
+\begin{gathered}
+\Omega_t=\{p:0\le\tilde{s}(p)<4\}\\
+\Omega_b=\{p:8<\tilde{s}(p)\le12\}\\
+\Omega_n=\{p:0\le\tilde{s}(p)\le12\}\\
+\mathrm{CNR}_{\mathrm{region}}=\frac{|\mu_{\Omega_t}-\mu_{\Omega_b}|}{\max\{\sigma_{\Omega_n},\mathrm{eps}\}}
+\end{gathered}
 ```
 
 $`\mu_\Omega`$ and $`\sigma_\Omega`$ are the result image's mean and sample standard deviation in region $`\Omega`$. The CSV field is `cnr`, reported separately from `global_cnr` in Eq. (3-13). If any of the three regions is empty, the result remains NaN. Thresholds are configured by `cnr_target`, `cnr_background`, and `cnr_noise`.
 
-The current LPIPS call can be written as $`d_{\mathrm{LPIPS}}=\mathrm{LPIPS}_{\mathrm{AlexNet}}(T(I_{\mathrm{result}}),T(I_{\mathrm{reference}}))`$, where $`T`$ replicates 8-bit grayscale into three channels and maps it to $`[-1,1]`$. Lower values indicate perceptual features closer to the reference.
+The current LPIPS call can be written as $`d_{\mathrm{LPIPS}}=\mathrm{LPIPS}_{\mathrm{AlexNet}}(T(I_{\mathrm{result}}),T(I_{\mathrm{reference}}))`$, where $`T(\cdot)`$ replicates 8-bit grayscale into three channels and maps it to $`[-1,1]`$. Lower values indicate perceptual features closer to the reference.
 
-The thesis also discusses the limitations of peak signal-to-noise ratio (PSNR). For comparison, its definition is $`\mathrm{MSE}=\frac1N\sum_p(I_{\mathrm{result}}(p)-I_{\mathrm{reference}}(p))^2`$, $`\mathrm{PSNR}=10\log_{10}(M^2/\mathrm{MSE})`$, where $`M`$ is the full grayscale range (255 for 8-bit grayscale, 1 for normalized grayscale). The current evaluation entry point does not export PSNR, and it is not a primary enhancement metric in the thesis.
+The thesis also discusses the limitations of peak signal-to-noise ratio (PSNR). For comparison, its definition is $`\mathrm{MSE}=\frac1N\sum_p(I_{\mathrm{result}}(p)-I_{\mathrm{reference}}(p))^2`$, $`\mathrm{PSNR}=10\log_{10}\left(\frac{M^2}{\mathrm{MSE}}\right)`$, where $`M`$ is the full grayscale range (255 for 8-bit grayscale, 1 for normalized grayscale). The current evaluation entry point does not export PSNR, and it is not a primary enhancement metric in the thesis.
 
 TU statistics separate ROI and background according to whether each block center falls inside the binary mask. Let the two TU sets be $`\mathcal{T}_r,\mathcal{T}_b`$ and TU side length be $`s_t`$. Then `roi_tu_mean`, `background_tu_mean`, and `tu_ratio` correspond to:
 
 ```math
-\bar{s}_r=\frac{1}{|\mathcal{T}_r|}\sum_{t\in\mathcal{T}_r}s_t,
-\qquad
-\bar{s}_b=\frac{1}{|\mathcal{T}_b|}\sum_{t\in\mathcal{T}_b}s_t,
-\qquad \rho_{\mathrm{TU}}=\frac{\bar{s}_b}{\bar{s}_r}.
+\begin{gathered}
+\bar{s}_r=\frac{1}{|\mathcal{T}_r|}\sum_{t\in\mathcal{T}_r}s_t\\
+\bar{s}_b=\frac{1}{|\mathcal{T}_b|}\sum_{t\in\mathcal{T}_b}s_t\\
+\rho_{\mathrm{TU}}=\frac{\bar{s}_b}{\bar{s}_r}
+\end{gathered}
 ```
 
 These are mean side lengths by TU count, without area weighting. Missing TU / mask inputs produce NaN. If annotations are supplied but a class is empty, the code sets that class mean to 0; a zero ROI mean yields a ratio of Inf.
