@@ -1,10 +1,10 @@
-# Ultrasound Image Enhancement Using Adaptive Compressed Sensing and State Space Models
+# An Ultrasound Image Enhancement Method Based on Adaptive Compressed Sensing and State Space Model
 
 Language: English | [简体中文](README_zh-CN.md)
 
-This project implements a complete pipeline that starts with ultrasound RF data or B-mode images, extracts HEVC partition structure priors, performs adaptive Block K-SVD denoising, enhances images with fewer beam lines using USR-Mamba, and computes evaluation metrics. The [final thesis](thesis.pdf) is included in the repository root.
+This project implements the ultrasound image enhancement method described in the [final thesis](thesis.pdf), following the pipeline **structural prior extraction → adaptive compressed sensing denoising → state space super-resolution enhancement**. It extracts structural priors from High Efficiency Video Coding (HEVC) block partitions, performs structural-prior-guided adaptive block K-SVD denoising (Block K-SVD), and reconstructs low-beamline-count B-mode images with the USR-Mamba super-resolution network. RF imaging, image preprocessing, network training, and quantitative evaluation complete the implementation.
 
-The main thesis pipeline is **32-line images → HEVC structure priors → three-scale Block K-SVD denoising → USR-Mamba inference → comparison with native 128-line reference images**. Network training uses preprocessed original 32-line/128-line image pairs; the denoising stage is applied during inference. The numbers 32 and 128 refer to beam-line counts; network inputs and outputs retain the same pixel dimensions.
+The main thesis pipeline is **32-beamline images → HEVC structural priors → three-scale Block K-SVD denoising → USR-Mamba super-resolution reconstruction → comparison with native 128-beamline reference images**. Network training uses preprocessed original 32-beamline/128-beamline image pairs; the denoising stage is applied during inference. The numbers 32 and 128 refer to beamline counts. Super-resolution here learns the mapping between these imaging conditions; network inputs and outputs retain the same pixel dimensions.
 
 ## Complete Workflow
 
@@ -14,19 +14,19 @@ Solid arrows indicate the main processing steps and data dependencies; dashed ar
 flowchart TD
     %% Keep stage titles in regular nodes so cross-stage edges do not cross subgraph titles or borders.
     RF["RF channel data<br/>and acquisition parameters"] --> BF["<b>1. RF imaging - optional</b><br/>beamform<br/>Delay-and-sum, envelope, scan conversion"]
-    BF --> BM["32-line / 128-line B-mode images"]
+    BF --> BM["32-beamline / 128-beamline B-mode images"]
     Existing["Existing B-mode images"] --> BM
     BM --> Prep["<b>1. Image preprocessing</b><br/>prepare<br/>Grayscale validation, cropping, resizing"]
-    Prep --> Low["Original 32-line TIFF"]
-    Prep --> High["Original 128-line TIFF"]
+    Prep --> Low["Original 32-beamline TIFF"]
+    Prep --> High["Original 128-beamline TIFF"]
     Prep --> PGM["PGM with identical pixels"]
 
-    PGM --> HEVC["<b>2. HEVC structure priors</b><br/>prior<br/>Encode images with fewer beam lines"]
+    PGM --> HEVC["<b>2. HEVC structural prior extraction</b><br/>prior<br/>Encode low-beamline-count images"]
     HEVC --> Stream["HEVC bitstream"]
     HEVC --> Blocks["TU / PU partition arrays"]
-    Blocks --> Maps["<b>3. Adaptive scale maps</b><br/>TU interpolation, PU grayscale adjustment<br/>Smoothing and scale selection"]
+    Blocks --> Maps["<b>3. Pixel-wise block-size maps</b><br/>TU interpolation, PU grayscale adjustment<br/>Smoothing and discrete clustering"]
     Low --> Maps
-    Maps --> KSVD["<b>3. Block K-SVD denoising</b><br/>denoise<br/>Dictionary learning, sparse coding, weighted reconstruction"]
+    Maps --> KSVD["<b>3. Adaptive compressed sensing<br/>denoising</b><br/>denoise - Block K-SVD<br/>Dictionary learning, sparse coding, weighted fusion"]
     Low --> KSVD
     KSVD --> Denoised["Denoised TIFF<br/>Continuous / discrete scale maps and timing"]
 
@@ -34,7 +34,7 @@ flowchart TD
     High -->|train / val| Pairs
     Pairs --> Train["<b>4. USR-Mamba training</b><br/>train<br/>Training augmentation, adversarial training, validation"]
     Train --> Weights["USR-Mamba weights<br/>Parameters and loss records"]
-    Denoised -->|cascade test images| Infer["<b>5. Image enhancement</b><br/>infer<br/>Load weights and enhance 32-line images"]
+    Denoised -->|cascade test images| Infer["<b>5. State space super-resolution<br/>enhancement</b><br/>infer - USR-Mamba<br/>Load weights and reconstruct 32-beamline images"]
     Weights --> Infer
     Infer --> Enhanced["Enhanced TIFF<br/>Original dimensions and relative directories"]
 
@@ -69,10 +69,10 @@ Block K-SVD provides two profiles: `cascade` uses block sizes 4, 8, and 12 befor
 | Stage | Directory | Inputs and outputs |
 | --- | --- | --- |
 | 1. Imaging and preprocessing | `imaging/` | `beamform` (optional), `prepare`: RF or B-mode images → aligned grayscale TIFF / PGM |
-| 2. Structure priors | `hevc_prior/` | `prior`: PGM → HEVC bitstreams and numerical TU / PU arrays |
-| 3. Adaptive sparse denoising | `block_ksvd/` | `denoise` / `fixed`: images and priors → denoised images, scale maps, and timing |
-| 4. Network training | `usr_mamba/` | `train`: original low/high beam-line image pairs and manifest → weights and training/validation records |
-| 5. State space enhancement | `usr_mamba/` | `infer`: denoised images with fewer beam lines and weights → enhanced images |
+| 2. Structural prior extraction | `hevc_prior/` | `prior`: PGM → HEVC bitstreams and numerical TU / PU arrays |
+| 3. Adaptive compressed sensing denoising | `block_ksvd/` | `denoise` / `fixed`: images and priors → denoised images, scale maps, and timing |
+| 4. Network training | `usr_mamba/` | `train`: original image pairs with low/high beamline counts and manifest → weights and training/validation records |
+| 5. State space super-resolution enhancement | `usr_mamba/` | `infer`: denoised low-beamline-count images and weights → super-resolution reconstructions |
 | 6. Metric computation | `evaluation/` | `evaluate`: registered images, scale maps, and annotations → per-image and group metrics |
 
 `run.py` is the unified entry point, and `configs/paper.json` defines the experiment parameters. Data locations, output locations, MATLAB, the encoder, and the computing device are supplied through command-line arguments. `common/` handles configuration, input conventions, and MATLAB invocation.
@@ -131,7 +131,7 @@ The following sections organize all **39 numbered equations** from Chapters 2–
 
 ### 1. RF Imaging and Image Preprocessing
 
-Input can be a MAT file containing channel signals and physical acquisition parameters, or an existing single-frame 8-bit grayscale TIFF. RF input first passes through `beamform` to produce B-mode TIFF; existing images enter `prepare` directly. Low/high beam-line image pairs must be registered and use the same preprocessing. The data provider must split sources into training, validation, and test sets in advance.
+Input can be a MAT file containing channel signals and physical acquisition parameters, or an existing single-frame 8-bit grayscale TIFF. RF input first passes through `beamform` to produce B-mode TIFF; existing images enter `prepare` directly. Image pairs with low/high beamline counts must be registered and use the same preprocessing. The data provider must split sources into training, validation, and test sets in advance.
 
 ```mermaid
 flowchart TD
@@ -152,9 +152,9 @@ The default crop window is `(0,0,750,1125)`, excluding the right and bottom boun
 
 Implementation: [RF imaging](imaging/beamform_rf.m), [preprocessing](imaging/preprocess.py).
 
-### 2. HEVC Structure Prior Extraction
+### 2. Structural Prior Extraction from HEVC Block Partitions
 
-`prior` performs intra coding on PGM images, using image structure to determine prediction-unit (PU) and transform-unit (TU) partitions. Subsequent denoising reads the partition arrays; image pixels come from the preprocessed TIFF.
+`prior` performs intra coding on PGM images, using image structure to determine prediction unit (PU) and transform unit (TU) partitions. The thesis restricts intra-prediction modes, reformulates the rate-distortion cost, and adapts the quantization zeroing threshold to obtain finer partitions around tissue boundaries, bright targets, and high-frequency textures. Subsequent denoising reads these structural prior arrays; image pixels come from the preprocessed TIFF.
 
 ```mermaid
 flowchart TD
@@ -305,9 +305,9 @@ Here $`\mathrm{sft}=\mathrm{LEVEL\_SHIFT\_TABLE}[\mathrm{sz}/8]+q`$, with table 
 
 Implementation: [prior extraction entry point](hevc_prior/runner.py), [encoder](hevc_prior/codec.c).
 
-### 3. Adaptive Scale Maps and Block K-SVD Denoising
+### 3. Adaptive Compressed Sensing Denoising with Block K-SVD
 
-`denoise` combines the image, TU, and PU to generate a block scale for each pixel, then learns dictionaries and reconstructs each scale that actually occurs. Dictionary-training images are formed by adding synthetic impulse/Gaussian noise to the current input; final sparse reconstruction uses patches from the current input image.
+Block K-SVD is the thesis's structural-prior-guided adaptive block K-SVD denoising method. `denoise` combines the image, TU, and PU to construct a pixel-wise block-size map (called a scale map below), using TU-center interpolation, PU grayscale adjustment, smoothing, and discrete clustering. It then performs dictionary learning and sparse reconstruction for each active scale, followed by Gaussian-weighted fusion. Dictionary-training images are formed by adding synthetic impulse/Gaussian noise to the current input; final sparse reconstruction uses patches from the current input image.
 
 ```mermaid
 flowchart TD
@@ -317,7 +317,7 @@ flowchart TD
     Interpolation --> Zoom["Enlarge scales in dark regions using PU grayscale"]
     Brightness --> Zoom
     Zoom --> Smooth["Mean smoothing and normalization<br/>Continuous scale map"]
-    Smooth --> Discrete["Select nearest block size<br/>from the chosen profile"]
+    Smooth --> Discrete["Discrete clustering<br/>Select nearest block size from the chosen profile"]
     Discrete --> TrainingPatches["Group by scale and extract training patches"]
     Image["Input grayscale image"] --> Noise["Synthetic impulse noise, dilation<br/>and Gaussian noise"]
     Image --> Brightness
@@ -471,15 +471,15 @@ Implementation: [batch denoising](block_ksvd/batch_denoise.m), [scale maps](bloc
 
 ### 4. Paired USR-Mamba Training and Independent Validation
 
-`train` reads `pairs.csv`, using preprocessed original 32-line images as inputs and original 128-line images as references. The manifest contains `source_id,split,input,reference`, where `split` is `train`, `val`, or `test`. The training entry point uses only the first two splits and checks source and file separation.
+`train` reads `pairs.csv`, using preprocessed original 32-beamline images as inputs and original 128-beamline images as references. The manifest contains `source_id,split,input,reference`, where `split` is `train`, `val`, or `test`. The training entry point uses only the first two splits and checks source and file separation.
 
 ```mermaid
 flowchart TD
-    Manifest["pairs.csv<br/>Original low/high beam-line TIFF pairs"] --> Check["Validate sources, paths, dimensions<br/>and dataset splits"]
+    Manifest["pairs.csv<br/>Original TIFF pairs with low/high beamline counts"] --> Check["Validate sources, paths, dimensions<br/>and dataset splits"]
     Check --> Train["train: four paired crops<br/>Restore size with Lanczos<br/>Horizontal flips"]
     Train --> Normalize["Map grayscale to -1 through 1"]
     Normalize --> Generator["USR-Mamba generates enhanced images"]
-    Generator --> L1["L1 loss against paired 128-line reference"]
+    Generator --> L1["L1 loss against paired 128-beamline reference"]
     Normalize --> Discriminator["Conditional Patch discriminator<br/>Real and generated pairs<br/>Generated-pair replay pool"]
     Generator --> Discriminator
     Discriminator --> Adversarial["Least-squares adversarial loss"]
@@ -496,13 +496,13 @@ flowchart TD
 
 Defaults are batch size 1, learning rate 0.0002, and Adam parameters `(0.5,0.999)`. Training uses 30 epochs at a constant learning rate followed by 30 epochs of linear decay. The generator loss is `10 × L1 + 1 × least-squares adversarial loss`. Each training source produces four deterministic paired crops, removing 0–32 pixels from the left, right, and bottom while keeping the top unchanged; horizontal flips expand these to eight samples. The validation set remains independent. Weights are saved every 5 epochs and at the final epoch by default, recording the model architecture and variant.
 
-`--variant` supports the full model `full` and four architecture ablations: a convolution-only bottleneck (`conv_bottleneck`), no Fourier branch (`no_fourier`), no residual refinement after the SSM (`no_refinement`), and row-major scanning (`raster_scan`).
+`--variant` supports the full model `full` and the thesis's four architecture ablations: a convolution-only bottleneck (`conv_bottleneck`), no frequency-domain branch (`no_fourier`), no convolutional refinement (`no_refinement`, removing residual convolutional refinement after the SSM), and raster scanning (`raster_scan`, row-major order).
 
 <a id="implementation-training-equations"></a>
 
 #### Implementation Supplement: Inputs, Training Losses, and Learning Rate
 
-For 8-bit grayscale value $`I`$, network input normalization is $`x=I/127.5-1`$. Let the original 32-line training input be $`x`$, its paired 128-line reference be $`y`$, the generator be $`G`$, and the conditional discriminator be $`D`$. With $`\langle\cdot\rangle`$ denoting a mean over the batch and relevant pixel or discriminator-map elements, the current training objective is:
+For 8-bit grayscale value $`I`$, network input normalization is $`x=I/127.5-1`$. Let the original 32-beamline training input be $`x`$, its paired 128-beamline reference be $`y`$, the generator be $`G`$, and the conditional discriminator be $`D`$. With $`\langle\cdot\rangle`$ denoting a mean over the batch and relevant pixel or discriminator-map elements, the current training objective is:
 
 ```math
 \begin{aligned}
@@ -531,13 +531,13 @@ The final epoch therefore uses learning rate $`r_0/31`$. By default, Adam with $
 
 Implementation: [paired data and splits](usr_mamba/dataset.py), [training and validation](usr_mamba/training.py).
 
-### 5. USR-Mamba Network and Inference on Images with Fewer Beam Lines
+### 5. State Space Super-Resolution Enhancement with USR-Mamba
 
-`infer` loads the specified weights and their recorded model architecture to enhance the denoised 32-line images produced by `cascade`. The following diagram shows the default full model; `H × W` denotes input height and width.
+USR-Mamba is the thesis's super-resolution network for medical ultrasound B-mode images. It combines spatial-frequency dual-domain state space modeling, residual convolution, and angular-uniform scanning in an encoder–high-resolution bottleneck–decoder architecture. `infer` loads the specified weights and their recorded model architecture to reconstruct the denoised 32-beamline images produced by `cascade`. The following diagram shows the default full model; `H × W` denotes input height and width. The scan-order implementation is detailed after Eq. (4-6).
 
 ```mermaid
 flowchart TD
-    Input["Denoised 32-line TIFF and selected weights"] --> Normalize["Map grayscale to -1 through 1"]
+    Input["Denoised 32-beamline TIFF and selected weights"] --> Normalize["Map grayscale to -1 through 1"]
     Normalize --> E1["7 × 7 convolution<br/>64 channels, H × W"]
     E1 --> E2["Stride-2 convolution<br/>128 channels, H/2 × W/2"]
     E2 --> E3["Stride-2 convolution<br/>256 channels, H/4 × W/4"]
@@ -551,15 +551,15 @@ flowchart TD
     Head --> Save["Map back to 0 through 255 and clip<br/>Save 8-bit grayscale TIFF"]
 ```
 
-The dual-domain SSM has two branches. Spatial features pass through a 2D scan, LayerNorm, and Mamba before being restored to their layout. Frequency features undergo a centered 2D FFT; real and imaginary parts are concatenated, scanned, and modeled, then inverse-transformed to the spatial domain. After branch fusion, the result is concatenated and fused with the input features, followed by residual convolutional refinement. The default scan order, `outside_in`, traverses successive boundaries toward the center.
+The dual-domain state space model (SSM) has an image-domain branch and a Fourier-domain branch. Image-domain features pass through a 2D scan, LayerNorm, and Mamba before being restored to their layout. Fourier-domain features undergo a centered 2D FFT; real and imaginary parts are concatenated, scanned, and modeled, then inverse-transformed to the image domain. After branch fusion, the result is concatenated and fused with the input features, followed by residual convolutional refinement. The default scan order, `outside_in`, traverses successive boundaries toward the center.
 
-Inference uses evaluation mode with gradients disabled. Input width and height must be divisible by the default downsampling factor of 4. Outputs retain dimensions, sample names, and relative directories. A comparison using original 32-line inputs can be run separately through `infer` with the same weights.
+Inference uses evaluation mode with gradients disabled. Input width and height must be divisible by the default downsampling factor of 4. Outputs retain dimensions, sample names, and relative directories. A comparison using original 32-beamline inputs can be run separately through `infer` with the same weights.
 
 <a id="paper-mamba-equations"></a>
 
 #### Thesis Equations: Encoding, Dual-Domain State Space, and Decoding
 
-Let $`I_{\mathrm{LR}}`$ be the image with fewer beam lines, $`I_{\mathrm{HR}}`$ the reference with more beam lines, $`U`$ the input size transformation, $`E`$ the encoder, $`f_1`$ the bottleneck input, and $`\{s_l\}_{l=1}^{L}`$ the skip features:
+Let $`I_{\mathrm{LR}}`$ be the low-resolution ultrasound input (low beamline count), $`I_{\mathrm{HR}}`$ the high-resolution reference (high beamline count), $`U`$ the input size transformation, $`E`$ the encoder, $`f_1`$ the bottleneck input, and $`\{s_l\}_{l=1}^{L}`$ the skip features:
 
 ```math
 \begin{cases}
@@ -569,7 +569,7 @@ X=U(I_{\mathrm{LR}}),\\
 \qquad\text{(4-1)}
 ```
 
-The thesis permits same-size inputs when preprocessing has already produced the target dimensions. This project's 32-line/128-line images share the same pixel grid, so $`U`$ is an identity size mapping here; grayscale is normalized separately as described above.
+The thesis permits same-size inputs when preprocessing has already produced the target dimensions. This project's 32-beamline/128-beamline images share the same pixel grid, so $`U`$ is an identity size mapping here; grayscale is normalized separately as described above.
 
 With $`J=9`$ bottleneck stages and dual-domain module positions $`S=\{1,5,9\}`$, the thesis defines stage updates as:
 
@@ -598,7 +598,7 @@ u_F=\mathcal{F}^{-1}\!\left(
 \qquad\text{(4-3)}
 ```
 
-Here $`\mathcal{M}_{I,j}`$ and $`\mathcal{M}_{F,j}`$ are the spatial and frequency branches, and $`P_j`$ is a channel projection. The complex rearrangement $`\mathcal{R}`$ here is defined separately from the training replay-pool notation. The code centers the 2D FFT with `fftshift`, applies `ifftshift` before inversion, and takes the real part of the inverse result. Spatial sequences have $`C`$ channels; frequency real/imaginary sequences have $`2C`$ channels.
+Here $`\mathcal{M}_{I,j}`$ and $`\mathcal{M}_{F,j}`$ are the image-domain and Fourier-domain branches, and $`P_j`$ is a channel projection. The complex rearrangement $`\mathcal{R}`$ here is defined separately from the training replay-pool notation. The code centers the 2D FFT with `fftshift`, applies `ifftshift` before inversion, and takes the real part of the inverse result. Spatial sequences have $`C`$ channels; frequency real/imaginary sequences have $`2C`$ channels.
 
 For either branch input $`q`$, the thesis describes branch computation using channel expansion, local convolution, a gated SSM, and channel mixing:
 
@@ -614,7 +614,7 @@ e_{\mathrm{SSM}}=q+\mathrm{Lin}_{1/\beta}(g\odot M),\\
 \qquad\text{(4-4)}
 ```
 
-$`\mathrm{Lin}_{\beta}`$ and $`\mathrm{Lin}_{1/\beta}`$ expand and compress channels, respectively. $`\mathrm{DWConv}`$ is depthwise convolution, $`\sigma`$ an activation, $`\odot`$ elementwise multiplication, and $`\mathrm{cmConv}`$ channel-mixing convolution. The spatial branch uses $`q=f_j`$; the frequency branch uses $`q=\mathcal{R}(\mathcal{F}(f_j))`$. **Implementation correspondence:** Eq. (4-4) retains the thesis's module-level expression. Each current branch calls `LayerNorm` and `mamba_ssm.Mamba`; `DualDomainState`, `FeatureFusion`, and `ResidualConvolution` then perform dual-domain fusion, input concatenation/fusion, and residual refinement. The code does not explicitly instantiate every independent layer shown in the equation.
+$`\mathrm{Lin}_{\beta}`$ and $`\mathrm{Lin}_{1/\beta}`$ expand and compress channels, respectively. $`\mathrm{DWConv}`$ is depthwise convolution, $`\sigma`$ an activation, $`\odot`$ elementwise multiplication, and $`\mathrm{cmConv}`$ channel-mixing convolution. The image-domain branch uses $`q=f_j`$; the Fourier-domain branch uses $`q=\mathcal{R}(\mathcal{F}(f_j))`$. **Implementation correspondence:** Eq. (4-4) retains the thesis's module-level expression. Each current branch calls `LayerNorm` and `mamba_ssm.Mamba`; `DualDomainState`, `FeatureFusion`, and `ResidualConvolution` then perform dual-domain fusion, input concatenation/fusion, and residual refinement. The code does not explicitly instantiate every independent layer shown in the equation.
 
 Decoder $`D`$ combines the bottleneck output with skip features:
 
@@ -639,11 +639,22 @@ M[p(n),c]=z_{\mathrm{out}}[n,c].
 \qquad\text{(4-6)}
 ```
 
-$`\ell[n,c]`$ is the hidden state, $`\bar{A}`$ the state-transition parameter, and $`\bar{B}[n]`$ and $`\bar{C}[n]`$ input-dependent parameters. Scanning changes only the permutation; it neither changes the number of features nor interpolates them. The thesis describes angularly uniform scanning as an approximate spiral from the center outward. The current default, `outside_in`, follows rectangular boundaries toward the center; `inside_out` reverses this order. Eq. (4-6) applies to these permutations, but the two directions should be treated as separate experiment settings. Reproduction should follow the saved `scan_order`.
+$`\ell[n,c]`$ is the hidden state, $`\bar{A}`$ the state-transition parameter, and $`\bar{B}[n]`$ and $`\bar{C}[n]`$ input-dependent parameters. Scanning changes only the permutation; it neither changes the number of features nor interpolates them. The thesis describes angular-uniform scanning as an approximate spiral from the center outward. The current default, `outside_in`, follows rectangular boundaries toward the center; `inside_out` reverses this order. Eq. (4-6) applies to these permutations, but the two directions should be treated as separate experiment settings. Reproduction should follow the saved `scan_order`.
 
 Implementation: [network architecture](usr_mamba/network.py), [inference and image saving](usr_mamba/inference.py).
 
 ### 6. Quantitative Evaluation and Group Statistics
+
+Metric names follow the final thesis. The two CNR definitions are reported separately, as detailed below.
+
+| Metric | English name | Chinese name | CSV field |
+| --- | --- | --- | --- |
+| CNR | Contrast-to-Noise Ratio | 对比度噪声比 | `global_cnr` / `cnr` |
+| ENL | Equivalent Number of Looks | 等效视数 | `enl` |
+| EPI | Edge Preservation Index | 边缘保持指数 | `epi` |
+| FSIM | Feature Similarity Index | 特征相似性指数 | `fsim` |
+| FWHM | Full Width at Half Maximum | 半高全宽 | `fwhm_x` / `fwhm_y` |
+| LPIPS | Learned Perceptual Image Patch Similarity | 学习感知图像块相似度 | `lpips` |
 
 `evaluate` reads `evaluation.csv`. Each row specifies a reference image, a method result, and optional continuous scale map, ROI, TU, and mask inputs. Results and references must share the same pixel coordinates. Separate manifests can compare original inputs, fixed-block denoising, adaptive denoising, and network-enhanced results.
 
@@ -733,7 +744,7 @@ f(t_L)=f(t_R)=\frac12\max_t f(t).
 \qquad\text{(3-17)}
 ```
 
-The code first computes a grayscale-weighted centroid from ROI pixels at least 90% as bright as the local maximum. It shifts the ROI center toward that centroid, limiting movement in each direction to 25% of the ROI's length along that direction, then extracts profiles through the adjusted center. If the half-maximum interval reaches a boundary, the interval expands in steps of 25% of its original length; linear interpolation between adjacent samples locates intersections. Units are pixels. Chapter 4 emphasizes `fwhm_x` for the point group, compared with the native 128-line reference.
+The code first computes a grayscale-weighted centroid from ROI pixels at least 90% as bright as the local maximum. It shifts the ROI center toward that centroid, limiting movement in each direction to 25% of the ROI's length along that direction, then extracts profiles through the adjusted center. If the half-maximum interval reaches a boundary, the interval expands in steps of 25% of its original length; linear interpolation between adjacent samples locates intersections. Units are pixels. Chapter 4 emphasizes `fwhm_x` for the bright-point group, compared with the native 128-beamline reference.
 
 For region $`\Omega_b`$ corresponding to block-size class $`b`$, a pixelwise metric map $`Q(p)`$, and Gaussian weights $`w_b(p)`$ consistent with reconstruction, the thesis gives the regional mean evaluation as:
 
@@ -765,7 +776,7 @@ $`\mu_\Omega`$ and $`\sigma_\Omega`$ are the result image's mean and sample stan
 
 The current LPIPS call can be written as $`d_{\mathrm{LPIPS}}=\mathrm{LPIPS}_{\mathrm{AlexNet}}(T(I_{\mathrm{result}}),T(I_{\mathrm{reference}}))`$, where $`T`$ replicates 8-bit grayscale into three channels and maps it to $`[-1,1]`$. Lower values indicate perceptual features closer to the reference.
 
-The thesis also discusses PSNR's limitations. For comparison, its definition is $`\mathrm{MSE}=\frac1N\sum_p(I_{\mathrm{result}}(p)-I_{\mathrm{reference}}(p))^2`$, $`\mathrm{PSNR}=10\log_{10}(M^2/\mathrm{MSE})`$, where $`M`$ is the full grayscale range (255 for 8-bit grayscale, 1 for normalized grayscale). The current evaluation entry point does not export PSNR, and it is not a primary enhancement metric in the thesis.
+The thesis also discusses the limitations of peak signal-to-noise ratio (PSNR). For comparison, its definition is $`\mathrm{MSE}=\frac1N\sum_p(I_{\mathrm{result}}(p)-I_{\mathrm{reference}}(p))^2`$, $`\mathrm{PSNR}=10\log_{10}(M^2/\mathrm{MSE})`$, where $`M`$ is the full grayscale range (255 for 8-bit grayscale, 1 for normalized grayscale). The current evaluation entry point does not export PSNR, and it is not a primary enhancement metric in the thesis.
 
 TU statistics separate ROI and background according to whether each block center falls inside the binary mask. Let the two TU sets be $`\mathcal{T}_r,\mathcal{T}_b`$ and TU side length be $`s_t`$. Then `roi_tu_mean`, `background_tu_mean`, and `tu_ratio` correspond to:
 
