@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 
 
-ROOT_FILES = {".gitignore", "README.md", "LICENSE", "CMakeLists.txt", "run.py",
+ROOT_FILES = {".gitignore", "README.md", "README_zh-CN.md", "LICENSE", "CMakeLists.txt", "run.py",
               "requirements.txt", "requirements-perceptual.txt", "thesis.pdf"}
 DIRECTORIES = {"configs": {".json"}, "common": {".py"}, "imaging": {".py", ".m"},
     "hevc_prior": {".c", ".h", ".py"}, "block_ksvd": {".m"}, "usr_mamba": {".py"},

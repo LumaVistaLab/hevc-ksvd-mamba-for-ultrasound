@@ -1,50 +1,52 @@
-# 基于自适应压缩感知与状态空间模型的超声图像增强方法
+# Ultrasound Image Enhancement Using Adaptive Compressed Sensing and State Space Models
 
-本项目实现从超声 RF 数据或 B 模式图像出发，提取 HEVC 分块结构先验，进行自适应 Block K-SVD 去噪，再通过 USR-Mamba 增强低线数图像并计算评价指标的完整流程。[最终论文](thesis.pdf)保留在根目录。
+Language: English | [简体中文](README_zh-CN.md)
 
-论文主路径为 **32 线图像 → HEVC 结构先验 → 三尺度 Block K-SVD 去噪 → USR-Mamba 推理 → 与原生 128 线参考图像比较**。网络训练使用预处理后的原始 32 线／128 线配对图像；前级去噪接入推理路径。32／128 表示波束线数，网络输入输出保持相同像素尺寸。
+This project implements a complete pipeline that starts with ultrasound RF data or B-mode images, extracts HEVC partition structure priors, performs adaptive Block K-SVD denoising, enhances images with fewer beam lines using USR-Mamba, and computes evaluation metrics. The [final thesis](thesis.pdf) is included in the repository root.
 
-## 完整流程图
+The main thesis pipeline is **32-line images → HEVC structure priors → three-scale Block K-SVD denoising → USR-Mamba inference → comparison with native 128-line reference images**. Network training uses preprocessed original 32-line/128-line image pairs; the denoising stage is applied during inference. The numbers 32 and 128 refer to beam-line counts; network inputs and outputs retain the same pixel dimensions.
 
-实线表示主要处理和数据依赖，虚线表示可选对照或辅助评价输入。图中的阶段名与 `run.py` 子命令对应；训练、推理和评价通过清单、权重及输出目录衔接，需要分别执行。阶段编号与下方分步说明一致，以边框颜色区分阶段，文字和底色跟随显示主题。
+## Complete Workflow
+
+Solid arrows indicate the main processing steps and data dependencies; dashed arrows indicate optional comparisons or auxiliary evaluation inputs. Stage names match the `run.py` subcommands. Training, inference, and evaluation are connected through manifests, weights, and output directories, and must be run separately. Stage numbers match the steps below. Border colors distinguish stages, while text and backgrounds follow the display theme.
 
 ```mermaid
 flowchart TD
-    %% 阶段标题放在普通节点中，避免跨子图连线穿过分组标题与边界。
-    RF["RF 通道数据<br/>与采集参数"] --> BF["<b>1. RF 成像（可选）</b><br/>beamform<br/>延迟求和、包络与扫描转换"]
-    BF --> BM["32 线／128 线 B 模式图像"]
-    Existing["已有 B 模式图像"] --> BM
-    BM --> Prep["<b>1. 图像预处理</b><br/>prepare<br/>灰度校验、裁剪与缩放"]
-    Prep --> Low["原始 32 线 TIFF"]
-    Prep --> High["原始 128 线 TIFF"]
-    Prep --> PGM["同像素 PGM"]
+    %% Keep stage titles in regular nodes so cross-stage edges do not cross subgraph titles or borders.
+    RF["RF channel data<br/>and acquisition parameters"] --> BF["<b>1. RF imaging - optional</b><br/>beamform<br/>Delay-and-sum, envelope, scan conversion"]
+    BF --> BM["32-line / 128-line B-mode images"]
+    Existing["Existing B-mode images"] --> BM
+    BM --> Prep["<b>1. Image preprocessing</b><br/>prepare<br/>Grayscale validation, cropping, resizing"]
+    Prep --> Low["Original 32-line TIFF"]
+    Prep --> High["Original 128-line TIFF"]
+    Prep --> PGM["PGM with identical pixels"]
 
-    PGM --> HEVC["<b>2. HEVC 结构先验</b><br/>prior<br/>对待处理低线数图像编码"]
-    HEVC --> Stream["HEVC 码流"]
-    HEVC --> Blocks["TU／PU 分块数组"]
-    Blocks --> Maps["<b>3. 自适应尺度图</b><br/>TU 插值与 PU 灰度调节<br/>平滑与尺度选择"]
+    PGM --> HEVC["<b>2. HEVC structure priors</b><br/>prior<br/>Encode images with fewer beam lines"]
+    HEVC --> Stream["HEVC bitstream"]
+    HEVC --> Blocks["TU / PU partition arrays"]
+    Blocks --> Maps["<b>3. Adaptive scale maps</b><br/>TU interpolation, PU grayscale adjustment<br/>Smoothing and scale selection"]
     Low --> Maps
-    Maps --> KSVD["<b>3. Block K-SVD 去噪</b><br/>denoise<br/>字典学习、稀疏编码与加权重建"]
+    Maps --> KSVD["<b>3. Block K-SVD denoising</b><br/>denoise<br/>Dictionary learning, sparse coding, weighted reconstruction"]
     Low --> KSVD
-    KSVD --> Denoised["去噪 TIFF<br/>连续／离散尺度图与耗时"]
+    KSVD --> Denoised["Denoised TIFF<br/>Continuous / discrete scale maps and timing"]
 
-    Low -->|train / val| Pairs["pairs.csv<br/>按来源划分的原始配对图像"]
+    Low -->|train / val| Pairs["pairs.csv<br/>Original image pairs split by source"]
     High -->|train / val| Pairs
-    Pairs --> Train["<b>4. USR-Mamba 训练</b><br/>train<br/>训练集增强、对抗训练与验证"]
-    Train --> Weights["USR-Mamba 权重<br/>参数与损失记录"]
-    Denoised -->|cascade 测试图像| Infer["<b>5. 低线数图像增强</b><br/>infer<br/>加载权重并增强 32 线图像"]
+    Pairs --> Train["<b>4. USR-Mamba training</b><br/>train<br/>Training augmentation, adversarial training, validation"]
+    Train --> Weights["USR-Mamba weights<br/>Parameters and loss records"]
+    Denoised -->|cascade test images| Infer["<b>5. Image enhancement</b><br/>infer<br/>Load weights and enhance 32-line images"]
     Weights --> Infer
-    Infer --> Enhanced["增强 TIFF<br/>保持输入尺寸与相对目录"]
+    Infer --> Enhanced["Enhanced TIFF<br/>Original dimensions and relative directories"]
 
-    Low -.-> Fixed["<b>3. 固定块对照</b><br/>fixed<br/>各固定尺度独立重建"]
-    Fixed -.-> Eval["<b>6. 定量评价</b><br/>evaluate<br/>依据 evaluation.csv 计算指标"]
-    Low -.->|原始图像对照| Eval
-    Denoised -.->|去噪对照／连续尺度图| Eval
-    Blocks -.->|TU 数组| Eval
-    Annotations["ROI 与二值掩码（可选）"] -.-> Eval
-    High -->|测试集参考| Eval
+    Low -.-> Fixed["<b>3. Fixed-block comparisons</b><br/>fixed<br/>Reconstruct each fixed scale separately"]
+    Fixed -.-> Eval["<b>6. Quantitative evaluation</b><br/>evaluate<br/>Compute metrics from evaluation.csv"]
+    Low -.->|Original-image baseline| Eval
+    Denoised -.->|Denoising comparison / continuous scale maps| Eval
+    Blocks -.->|TU arrays| Eval
+    Annotations["ROI and binary masks - optional"] -.-> Eval
+    High -->|Test-set reference| Eval
     Enhanced --> Eval
-    Eval --> Reports["metrics.csv：单图指标<br/>group_means.csv：分组均值"]
+    Eval --> Reports["metrics.csv: per-image metrics<br/>group_means.csv: group means"]
 
     classDef imaging stroke:#6688cc,stroke-width:2px;
     classDef structure stroke:#c49a3a,stroke-width:2px;
@@ -60,86 +62,121 @@ flowchart TD
     class Annotations,Eval,Reports metrics;
 ```
 
-Block K-SVD 提供两组配置：`cascade` 使用 4、8、12 三种块尺寸，作为 USR-Mamba 前级；`denoising` 使用 4、8、12、16、20、24 六种块尺寸，用于独立去噪实验。完整图中的 `denoise` 按所选配置分别运行，`fixed` 为各固定块尺寸生成独立对照结果。
+Block K-SVD provides two profiles: `cascade` uses block sizes 4, 8, and 12 before USR-Mamba; `denoising` uses six sizes, 4, 8, 12, 16, 20, and 24, for standalone denoising experiments. In the complete workflow, `denoise` runs with the selected profile, while `fixed` generates a separate comparison result for each fixed block size.
 
-## 阶段与代码入口
+## Stages and Code Entry Points
 
-| 阶段 | 目录 | 输入与输出 |
+| Stage | Directory | Inputs and outputs |
 | --- | --- | --- |
-| 1. 成像与预处理 | `imaging/` | `beamform`（可选）、`prepare`：RF 或 B 模式图像 → 对齐的灰度 TIFF／PGM |
-| 2. 结构先验 | `hevc_prior/` | `prior`：PGM → HEVC 码流、TU／PU 数值数组 |
-| 3. 自适应稀疏去噪 | `block_ksvd/` | `denoise`／`fixed`：图像及先验 → 去噪图像、尺度图与耗时 |
-| 4. 网络训练 | `usr_mamba/` | `train`：原始低／高线数配对图像及清单 → 权重与训练／验证记录 |
-| 5. 状态空间增强 | `usr_mamba/` | `infer`：去噪低线数图像及权重 → 增强图像 |
-| 6. 指标计算 | `evaluation/` | `evaluate`：配准图像、尺度图及标注 → 单图与分组指标 |
+| 1. Imaging and preprocessing | `imaging/` | `beamform` (optional), `prepare`: RF or B-mode images → aligned grayscale TIFF / PGM |
+| 2. Structure priors | `hevc_prior/` | `prior`: PGM → HEVC bitstreams and numerical TU / PU arrays |
+| 3. Adaptive sparse denoising | `block_ksvd/` | `denoise` / `fixed`: images and priors → denoised images, scale maps, and timing |
+| 4. Network training | `usr_mamba/` | `train`: original low/high beam-line image pairs and manifest → weights and training/validation records |
+| 5. State space enhancement | `usr_mamba/` | `infer`: denoised images with fewer beam lines and weights → enhanced images |
+| 6. Metric computation | `evaluation/` | `evaluate`: registered images, scale maps, and annotations → per-image and group metrics |
 
-`run.py` 提供统一入口，`configs/paper.json` 集中定义实验参数；数据位置、输出位置、MATLAB、编码器和计算设备均由命令行传入。`common/` 只处理配置、输入约定及 MATLAB 调用。
+`run.py` is the unified entry point, and `configs/paper.json` defines the experiment parameters. Data locations, output locations, MATLAB, the encoder, and the computing device are supplied through command-line arguments. `common/` handles configuration, input conventions, and MATLAB invocation.
 
-## 论文公式索引
+## Repository Layout
 
-以下按处理阶段整理[最终论文](thesis.pdf)第 2–4 章的全部 **39 个编号公式**，保留原式编号，并补充符号、参数及代码对应关系。标为“实现补充”的公式用于展开当前程序的计算步骤，不占用论文编号。论文采用的符号在不同章节可能复用，各组公式分别定义。
+```text
+hevc-ksvd-mamba-for-ultrasound/
+|-- README.md                    English documentation.
+|-- README_zh-CN.md              Simplified Chinese documentation.
+|-- thesis.pdf                   Final thesis.
+|-- run.py                       Unified command-line entry point.
+|-- CMakeLists.txt               HEVC encoder build configuration.
+|-- requirements.txt             Core Python dependencies.
+|-- requirements-perceptual.txt  Optional perceptual-evaluation dependencies.
+|-- LICENSE                      Project license.
+|-- .gitignore                   Excludes local data, outputs, builds, and editor files.
+|-- configs/
+|   `-- paper.json               Experiment parameters.
+|-- common/                      Configuration, input conventions, and MATLAB invocation.
+|-- imaging/                     RF beamforming and image preprocessing.
+|-- hevc_prior/                  HEVC encoder and partition-prior extraction.
+|-- block_ksvd/                  Scale maps, dictionary learning, sparse coding, and reconstruction.
+|-- usr_mamba/                   Paired data, network, training, and inference.
+|-- evaluation/                  Image, region, partition, and perceptual metrics.
+|-- docs/
+|   |-- reproduction.md          Environment setup and stage commands (Chinese).
+|   |-- data_contract.md         Input and manifest formats (Chinese).
+|   |-- validation.md            Validation record and tested scope (Chinese).
+|   `-- archive_manifest.json    Archive file inventory and SHA-256 hashes.
+|-- licenses/
+|   `-- third_party.txt          Third-party license notices.
+`-- tools/
+    |-- smoke_test.py            Synthetic end-to-end validation.
+    `-- verify_archive.py        Archive scope and integrity verification.
+```
 
-| 公式 | 内容 | README 位置 |
+Both README files describe the same pipeline, equations, and code entry points. Local `work/`, data, output, weight, build, and editor workspace files are excluded by `.gitignore` and are not part of the tracked source layout above.
+
+## Thesis Equation Index
+
+The following sections organize all **39 numbered equations** from Chapters 2–4 of the [final thesis](thesis.pdf) by processing stage, retaining the original equation numbers and adding symbol definitions, parameters, and code references. Equations labeled “Implementation supplement” expand the current program's calculations and do not use thesis equation numbers. Symbols may be reused across chapters; each group defines them separately.
+
+| Equations | Topic | README location |
 | --- | --- | --- |
-| （2-1）–（2-5） | 量化选择、率失真代价、平方误差和及基础权重 | [HEVC 公式](#paper-hevc-equations) |
-| （2-6）–（2-12） | 结构失真、双向梯度、动态权重与 TU 梯度能量 | [HEVC 公式](#paper-hevc-equations) |
-| （2-13）–（2-15） | 系数群基础与自适应清零阈值 | [HEVC 公式](#paper-hevc-equations) |
-| （3-1）–（3-7） | 稀疏表示、选原子、残差、SVD 更新与重叠融合 | [K-SVD 公式](#paper-ksvd-equations) |
-| （3-8）–（3-12） | TU 插值、PU 灰度放大、尺度归一化、多字典与高斯窗 | [自适应尺度公式](#paper-scale-equations) |
-| （4-1）–（4-6） | 编码、瓶颈、双域分支、解码及扫描状态更新 | [USR-Mamba 公式](#paper-mamba-equations) |
-| （3-13）–（3-18） | CNR、ENL、EPI、FSIM、FWHM 与尺度区域加权评价 | [评价公式](#paper-metric-equations) |
-| 实现补充 | 输入归一化、训练损失、学习率、分区 CNR 等 | [训练公式](#implementation-training-equations)、[评价公式](#paper-metric-equations) |
+| (2-1)–(2-5) | Quantization selection, rate-distortion cost, sum of squared errors, and base weights | [HEVC equations](#paper-hevc-equations) |
+| (2-6)–(2-12) | Structural distortion, gradients in both directions, dynamic weights, and TU gradient energy | [HEVC equations](#paper-hevc-equations) |
+| (2-13)–(2-15) | Base and adaptive coefficient-group zeroing thresholds | [HEVC equations](#paper-hevc-equations) |
+| (3-1)–(3-7) | Sparse representation, atom selection, residuals, SVD updates, and overlap fusion | [K-SVD equations](#paper-ksvd-equations) |
+| (3-8)–(3-12) | TU interpolation, PU grayscale scaling, scale normalization, multiple dictionaries, and Gaussian windows | [Adaptive scale equations](#paper-scale-equations) |
+| (4-1)–(4-6) | Encoding, bottleneck, dual-domain branches, decoding, and scan-state updates | [USR-Mamba equations](#paper-mamba-equations) |
+| (3-13)–(3-18) | CNR, ENL, EPI, FSIM, FWHM, and weighted evaluation of scale regions | [Evaluation equations](#paper-metric-equations) |
+| Implementation supplements | Input normalization, training losses, learning rate, regional CNR, and more | [Training equations](#implementation-training-equations), [evaluation equations](#paper-metric-equations) |
 
-## 分步处理流程
+## Processing Steps
 
-### 1. RF 成像与图像预处理
+### 1. RF Imaging and Image Preprocessing
 
-输入可为包含通道信号及物理采集参数的 MAT 文件，也可为已有的单帧 8 位灰度 TIFF。RF 输入先通过 `beamform` 生成 B 模式 TIFF，已有图像直接进入 `prepare`。低／高线数配对必须配准并采用相同预处理，训练、验证和测试来源由数据提供者事先划分。
+Input can be a MAT file containing channel signals and physical acquisition parameters, or an existing single-frame 8-bit grayscale TIFF. RF input first passes through `beamform` to produce B-mode TIFF; existing images enter `prepare` directly. Low/high beam-line image pairs must be registered and use the same preprocessing. The data provider must split sources into training, validation, and test sets in advance.
 
 ```mermaid
 flowchart TD
-    RF["RF 通道数据、频率<br/>采样率与发射延迟"] --> Window["逐扫描线平移 Hanning 窗<br/>并加权通道"]
-    Window --> DAS["按传播延迟取样<br/>并进行通道求和"]
-    DAS --> Envelope["归一化与 Hilbert 包络检测"]
-    Envelope --> Log["对数压缩<br/>双线性扫描转换"]
-    Log --> TIFF["B 模式灰度 TIFF"]
-    Existing["已有 B 模式 TIFF"] --> TIFF
-    TIFF --> Validate["校验单帧、8 位灰度<br/>及裁剪范围"]
-    Validate --> Crop["按 crop_xyxy 裁剪"]
-    Crop --> Resize["等比例双线性缩放<br/>512 × 768（宽 × 高）"]
-    Resize --> Images["images/：新建灰度 TIFF"]
-    Resize --> PGM["pgm/：同像素 P5 PGM"]
+    RF["RF channel data, frequency<br/>Sampling rate and transmit delays"] --> Window["Shift a Hanning window per scan line<br/>and weight channels"]
+    Window --> DAS["Sample at propagation delays<br/>and sum channels"]
+    DAS --> Envelope["Normalization and Hilbert envelope detection"]
+    Envelope --> Log["Log compression<br/>Bilinear scan conversion"]
+    Log --> TIFF["B-mode grayscale TIFF"]
+    Existing["Existing B-mode TIFF"] --> TIFF
+    TIFF --> Validate["Validate single-frame, 8-bit grayscale<br/>and crop bounds"]
+    Validate --> Crop["Crop using crop_xyxy"]
+    Crop --> Resize["Bilinear resizing with aspect ratio preserved<br/>512 × 768 - width × height"]
+    Resize --> Images["images/: new grayscale TIFF"]
+    Resize --> PGM["pgm/: P5 PGM with identical pixels"]
 ```
 
-默认裁剪窗口为 `(0,0,750,1125)`，右／下边界不包含在裁剪区域内。预处理输出保留中性文件名及相对目录，并重新写入像素，移除原 TIFF 元数据。HEVC 输入宽高须为 32 的倍数。
+The default crop window is `(0,0,750,1125)`, excluding the right and bottom boundaries. Preprocessing preserves neutral filenames and relative directories, and rewrites pixels to remove the original TIFF metadata. HEVC input width and height must be multiples of 32.
 
-对应实现：[RF 成像](imaging/beamform_rf.m)、[预处理](imaging/preprocess.py)。
+Implementation: [RF imaging](imaging/beamform_rf.m), [preprocessing](imaging/preprocess.py).
 
-### 2. HEVC 结构先验提取
+### 2. HEVC Structure Prior Extraction
 
-`prior` 对 PGM 进行帧内编码，利用图像结构决定预测单元（PU）和变换单元（TU）的分块。后续去噪读取的是分块数组，图像像素来自预处理 TIFF。
+`prior` performs intra coding on PGM images, using image structure to determine prediction-unit (PU) and transform-unit (TU) partitions. Subsequent denoising reads the partition arrays; image pixels come from the preprocessed TIFF.
 
 ```mermaid
 flowchart TD
-    PGM["P5 灰度 PGM"] --> CTU["按 32 × 32 编码树单元处理"]
-    CTU --> Candidates["递归候选分块<br/>PLANAR／DC 帧内预测"]
-    Candidates --> Transform["预测残差变换与量化"]
-    CTU --> Gradient["计算块梯度能量"]
-    Gradient -.->|调整系数清零阈值| Transform
-    Transform --> Cost["结合像素／结构失真与码率<br/>评估候选"]
-    Gradient -.->|调节失真与码率权重| Cost
-    Cost --> Select["选择分块及预测模式"]
-    Select --> Bitstream["熵编码并输出 .hevc 码流"]
-    Select --> Arrays["导出 _tu.csv 与 _pu.csv"]
+    PGM["P5 grayscale PGM"] --> CTU["Process 32 × 32 coding tree units"]
+    CTU --> Candidates["Recursive candidate partitions<br/>PLANAR / DC intra prediction"]
+    Candidates --> Transform["Transform and quantize prediction residuals"]
+    CTU --> Gradient["Compute block gradient energy"]
+    Gradient -.->|Adjust coefficient zeroing threshold| Transform
+    Transform --> Cost["Evaluate candidates using pixel / structural<br/>distortion and bitrate"]
+    Gradient -.->|Adjust distortion and bitrate weights| Cost
+    Cost --> Select["Select partition and prediction mode"]
+    Select --> Bitstream["Entropy-code and write .hevc bitstream"]
+    Select --> Arrays["Export _tu.csv and _pu.csv"]
 ```
 
-质量索引 0–4 对应 QP 4、10、16、22、28，默认索引为 0。TU／PU CSV 均无表头，每行是 `[block_size,x,y]`，坐标以左上角为原点、从 0 开始；相对目录和样本名与输入一致。
+Quality indices 0–4 correspond to QP values 4, 10, 16, 22, and 28; the default index is 0. TU / PU CSV files have no header. Each row is `[block_size,x,y]`, with zero-based coordinates originating at the top-left corner. Relative directories and sample names match the input.
 
 <a id="paper-hevc-equations"></a>
 
-#### 论文公式：率失真与结构自适应量化
+#### Thesis Equations: Rate-Distortion and Structure-Adaptive Quantization
 
-设 $`c_i`$ 为第 $`i`$ 个变换系数，$`l_{i,k}`$ 为其第 $`k`$ 个候选量化值，$`D(c_i,l_{i,k})`$ 为量化失真，$`R(l_{i,k})`$ 为编码比特数，$`\lambda`$ 为拉格朗日乘子。论文的量化选择准则为：
+Let $`c_i`$ be transform coefficient $`i`$, $`l_{i,k}`$ its candidate quantized value $`k`$, $`D(c_i,l_{i,k})`$ the quantization distortion, $`R(l_{i,k})`$ the coded bit count, and $`\lambda`$ the Lagrange multiplier. The thesis selects quantized values using:
 
 ```math
 l_i^*=\underset{k}{\mathrm{argmin}}
@@ -147,7 +184,7 @@ l_i^*=\underset{k}{\mathrm{argmin}}
 \qquad\text{(2-1)}
 ```
 
-这里 $`l_i^*`$ 表示上述最优候选所对应的量化值。设 $`X_{\mathrm{orig}}`$、$`X_{\mathrm{rcon}}`$ 分别为原始块和重建块，传统率失真代价写为：
+Here $`l_i^*`$ denotes the quantized value of the optimal candidate above. Let $`X_{\mathrm{orig}}`$ and $`X_{\mathrm{rcon}}`$ be the original and reconstructed blocks. The conventional rate-distortion cost is:
 
 ```math
 \mathrm{RD}_{\mathrm{cost}}
@@ -155,7 +192,7 @@ l_i^*=\underset{k}{\mathrm{argmin}}
 \qquad\text{(2-2)}
 ```
 
-编码器以离散质量索引 $`q=\mathrm{qpd6}\in\{0,1,2,3,4\}`$ 查表设置失真与比特数权重，等价地写成：
+The encoder uses the discrete quality index $`q=\mathrm{qpd6}\in\{0,1,2,3,4\}`$ to look up distortion and bit-count weights, equivalently written as:
 
 ```math
 \mathrm{RD}_{\mathrm{cost}}
@@ -178,9 +215,9 @@ w_b(q)=[1,4,16,29,23]_q.
 \qquad\text{(2-5)}
 ```
 
-其中 $`\mathrm{sz}`$ 为 TU 边长，$`R`$ 为当前 TU 的编码比特数；$`q`$ 对应配置中的 `quality_index`，不是直接使用 QP 数值作为数组下标。
+Here $`\mathrm{sz}`$ is the TU side length and $`R`$ is the current TU's coded bit count. The index $`q`$ corresponds to `quality_index` in the configuration; the QP value itself is not used as the array index.
 
-改进后，追加原始块与重建块之间的梯度差惩罚，并动态调整两项权重：
+The modified cost adds a gradient-difference penalty between the original and reconstructed blocks, and adjusts both weights dynamically:
 
 ```math
 \mathrm{RD}'_{\mathrm{cost}}=w'_dD_{\mathrm{struct}}+w'_bR.
@@ -240,9 +277,9 @@ G_{\mathrm{TU}}=\frac{1}{\mathrm{sz}^2}
 \qquad\text{(2-12)}
 ```
 
-梯度只在块内部计算，但能量按完整块面积 $`\mathrm{sz}^2`$ 归一化。高梯度区域增大失真项权重、减小比特数项权重，使细粒度结构在候选比较中更受重视。当前 C 编码器对 $`G_{\mathrm{TU}}`$ 使用整数除法，结构梯度差的系数由 `structure_weight` 控制，默认值为 1。
+Gradients are computed only inside the block, but energy is normalized by the full block area $`\mathrm{sz}^2`$. High-gradient regions increase the distortion weight and decrease the bit-count weight, giving fine structures greater importance when comparing candidates. The current C encoder uses integer division for $`G_{\mathrm{TU}}`$. The structural gradient-difference coefficient is controlled by `structure_weight`, which defaults to 1.
 
-系数群（CG）原清零阈值、基础阈值及自适应阈值分别为：
+The original, base, and adaptive coefficient-group (CG) zeroing thresholds are:
 
 ```math
 T_{\mathrm{CG}}=\frac{9\times2^{\mathrm{sft}}}{4}
@@ -264,55 +301,55 @@ T_{\mathrm{base}},&G_{\mathrm{TU}}\le2.
 \qquad\text{(2-15)}
 ```
 
-其中 $`\mathrm{sft}=\mathrm{LEVEL\_SHIFT\_TABLE}[\mathrm{sz}/8]+q`$，表下标按编码器整数运算解释。代码通过移位实现阈值缩放及整数截断；`zero_multiplier=9`、`zero_shift=2`、`zero_reduction_shift=1` 对应上述默认式。该阈值只控制系数群清零判定，候选量化等级仍按代价比较。
+Here $`\mathrm{sft}=\mathrm{LEVEL\_SHIFT\_TABLE}[\mathrm{sz}/8]+q`$, with table indexing interpreted using the encoder's integer arithmetic. The code uses bit shifts for threshold scaling and integer truncation; `zero_multiplier=9`, `zero_shift=2`, and `zero_reduction_shift=1` give the defaults above. This threshold only controls coefficient-group zeroing; candidate quantization levels are still compared by cost.
 
-对应实现：[先验提取入口](hevc_prior/runner.py)、[编码器](hevc_prior/codec.c)。
+Implementation: [prior extraction entry point](hevc_prior/runner.py), [encoder](hevc_prior/codec.c).
 
-### 3. 自适应尺度图与 Block K-SVD 去噪
+### 3. Adaptive Scale Maps and Block K-SVD Denoising
 
-`denoise` 将图像、TU 和 PU 结合，先生成每个像素的块尺度，再按实际出现的尺度分别学习字典和重建。字典训练图像由当前输入叠加合成脉冲／高斯噪声得到；最终稀疏重建使用当前输入图像的块。
+`denoise` combines the image, TU, and PU to generate a block scale for each pixel, then learns dictionaries and reconstructs each scale that actually occurs. Dictionary-training images are formed by adding synthetic impulse/Gaussian noise to the current input; final sparse reconstruction uses patches from the current input image.
 
 ```mermaid
 flowchart TD
-    TU["TU：块尺寸与位置"] --> Centers["提取中心、去重<br/>并保留较小 TU 尺寸"]
-    Centers --> Interpolation["Delaunay 线性插值<br/>凸包外最近邻补全"]
-    PU["PU 分块"] --> Brightness["计算各 PU 平均灰度"]
-    Interpolation --> Zoom["根据 PU 灰度放大暗区尺度"]
+    TU["TU: block sizes and positions"] --> Centers["Extract and deduplicate centers<br/>Retain smaller TU sizes"]
+    Centers --> Interpolation["Delaunay linear interpolation<br/>Nearest-neighbor fill outside convex hull"]
+    PU["PU partitions"] --> Brightness["Compute mean grayscale for each PU"]
+    Interpolation --> Zoom["Enlarge scales in dark regions using PU grayscale"]
     Brightness --> Zoom
-    Zoom --> Smooth["均值平滑并归一化<br/>生成连续尺度图"]
-    Smooth --> Discrete["匹配所选 profile 中<br/>的最近块尺寸"]
-    Discrete --> TrainingPatches["按尺度分组并提取训练块"]
-    Image["输入灰度图像"] --> Noise["合成脉冲噪声、膨胀<br/>及高斯噪声"]
+    Zoom --> Smooth["Mean smoothing and normalization<br/>Continuous scale map"]
+    Smooth --> Discrete["Select nearest block size<br/>from the chosen profile"]
+    Discrete --> TrainingPatches["Group by scale and extract training patches"]
+    Image["Input grayscale image"] --> Noise["Synthetic impulse noise, dilation<br/>and Gaussian noise"]
     Image --> Brightness
     Noise --> TrainingPatches
-    TrainingPatches --> Dictionary["每种尺度初始化字典"]
-    Dictionary --> Learn["交替执行相关性稀疏编码<br/>与逐原子 SVD 更新"]
-    Learn --> Stop{"达到收敛门限或迭代上限？"}
-    Stop -->|否| Learn
-    Stop -->|是| Encode["用各尺度字典<br/>对输入图像块稀疏编码"]
+    TrainingPatches --> Dictionary["Initialize a dictionary for each scale"]
+    Dictionary --> Learn["Alternate correlation-based sparse coding<br/>and per-atom SVD updates"]
+    Learn --> Stop{"Convergence threshold or iteration limit reached?"}
+    Stop -->|No| Learn
+    Stop -->|Yes| Encode["Sparse-code input patches<br/>using the dictionary for each scale"]
     Image --> Encode
     Discrete --> Encode
-    Encode --> Reconstruct["字典乘系数还原图像块"]
-    Reconstruct --> Fusion["重叠块高斯加权累加<br/>并归一化"]
-    Fusion --> Output["images/ 去噪图像与 timing.csv"]
-    Smooth --> Continuous["scale_maps/ 连续尺度图"]
-    Discrete --> DiscreteOutput["scale_maps/ 离散尺度图"]
+    Encode --> Reconstruct["Reconstruct patches as dictionary × coefficients"]
+    Reconstruct --> Fusion["Accumulate overlapping patches<br/>with Gaussian weights and normalize"]
+    Fusion --> Output["images/: denoised images and timing.csv"]
+    Smooth --> Continuous["scale_maps/: continuous scale map"]
+    Discrete --> DiscreteOutput["scale_maps/: discrete scale map"]
 ```
 
-中心不足或共线时，尺度插值回退到最近邻。默认字典为 512 个原子、稀疏率 0.1、最多迭代 10 轮。连续尺度图用于后续尺度分区评价，离散尺度图决定逐像素块尺寸。
+Scale interpolation falls back to nearest neighbors when centers are insufficient or collinear. Defaults are 512 dictionary atoms, a sparsity ratio of 0.1, and at most 10 iterations. The continuous scale map supports subsequent regional evaluation; the discrete map determines the block size at each pixel.
 
-| `--profile` | 块边长（像素） | 用途 |
+| `--profile` | Block side lengths (pixels) | Purpose |
 | --- | --- | --- |
-| `cascade` | 4、8、12 | USR-Mamba 推理前级 |
-| `denoising` | 4、8、12、16、20、24 | 独立去噪与固定块对照 |
+| `cascade` | 4, 8, 12 | Denoising before USR-Mamba inference |
+| `denoising` | 4, 8, 12, 16, 20, 24 | Standalone denoising and fixed-block comparisons |
 
-`fixed` 跳过 TU／PU 尺度估计，对配置中的每种固定块尺寸分别学习、重建，并使用等权重融合；同一图像的各固定尺度共享同一份合成训练噪声。结果写入 `images/fixed_04/` 等目录。
+`fixed` skips TU / PU scale estimation, learns and reconstructs each configured fixed block size separately, and fuses overlapping patches with equal weights. All fixed scales for the same image share the same synthetic training noise. Results are written to directories such as `images/fixed_04/`.
 
 <a id="paper-ksvd-equations"></a>
 
-#### 论文公式：稀疏表示与 K-SVD 更新
+#### Thesis Equations: Sparse Representation and K-SVD Updates
 
-将 $`m`$ 个图像块展开为列向量，组成 $`X=[x_1,\ldots,x_m]\in\mathbb{R}^{d\times m}`$；$`D\in\mathbb{R}^{d\times K}`$ 为字典，$`A=[a_1,\ldots,a_m]\in\mathbb{R}^{K\times m}`$ 为稀疏系数。这里以 $`d`$ 表示论文中的块向量维数 $`n`$，避免与后文尺度层数混淆。字典学习目标为：
+Flatten $`m`$ image patches into column vectors to form $`X=[x_1,\ldots,x_m]\in\mathbb{R}^{d\times m}`$. Let $`D\in\mathbb{R}^{d\times K}`$ be the dictionary and $`A=[a_1,\ldots,a_m]\in\mathbb{R}^{K\times m}`$ the sparse coefficients. Here $`d`$ denotes the patch-vector dimension called $`n`$ in the thesis, to distinguish it from the number of scales below. The dictionary-learning objective is:
 
 ```math
 \min_{D,A}\|X-DA\|_F^2,
@@ -320,7 +357,7 @@ flowchart TD
 \qquad\text{(3-1)}
 ```
 
-$`\|\cdot\|_F`$ 为 Frobenius 范数，$`\|\cdot\|_0`$ 为非零元素数，$`L`$ 为单块允许使用的原子数。字典列初始归一化到单位二范数。论文给出的第 $`\ell`$ 步选原子与残差更新为：
+$`\|\cdot\|_F`$ is the Frobenius norm, $`\|\cdot\|_0`$ counts nonzero elements, and $`L`$ is the maximum number of atoms allowed per patch. Dictionary columns are initially normalized to unit L2 norm. The thesis gives the following atom selection and residual update at step $`\ell`$:
 
 ```math
 I_\ell=\underset{j}{\mathrm{argmax}}
@@ -333,9 +370,9 @@ r_\ell=r_{\ell-1}-a_{I_\ell}d_{I_\ell}.
 \qquad\text{(3-3)}
 ```
 
-其中 $`r_0=x_i`$。 **实现补充：** 当前 `sparse_encode.m` 在尚未选取的原子中最大化相关性的 **绝对值**，并令 $`a_{I_\ell}=d_{I_\ell}^{\mathsf T}r_{\ell-1}`$，再按式（3-3）更新；不进行已选原子的联合最小二乘重估。它采用论文所述的逐次相关选择与残差更新规则，应与严格的正交匹配追踪实现区分。停止条件为已选 $`L`$ 个原子或 $`\|r_\ell\|_2\le\varepsilon`$；默认 $`K=512`$、$`L=\mathrm{round}(0.1K)=51`$、$`\varepsilon=46225`$，数值按当前输入量纲直接比较。
+Here $`r_0=x_i`$. **Implementation supplement:** The current `sparse_encode.m` maximizes the **absolute value** of the correlation among unselected atoms, sets $`a_{I_\ell}=d_{I_\ell}^{\mathsf T}r_{\ell-1}`$, and updates the residual using Eq. (3-3). It does not jointly re-estimate selected coefficients by least squares. It follows the thesis's successive correlation selection and residual update rule, and should be distinguished from strict orthogonal matching pursuit. It stops after selecting $`L`$ atoms or when $`\|r_\ell\|_2\le\varepsilon`$. Defaults are $`K=512`$, $`L=\mathrm{round}(0.1K)=51`$, and $`\varepsilon=46225`$, compared directly in the current input's numerical units.
 
-对于第 $`t`$ 个字典原子，取激活样本集合 $`\mathcal{I}_t=\{i:A(t,i)\ne0\}`$，先补回该原子的贡献，构造局部残差：
+For dictionary atom $`t`$, take the active sample set $`\mathcal{I}_t=\{i:A(t,i)\ne0\}`$, and add back that atom's contribution to construct the local residual:
 
 ```math
 R_t=X(:,\mathcal{I}_t)-DA(:,\mathcal{I}_t)
@@ -356,9 +393,9 @@ A(t,\mathcal{I}_t)\leftarrow\Sigma(1,1)V(:,1)^{\mathsf T}.
 \qquad\text{(3-6)}
 ```
 
-代码用 `svds(local,1)` 求上述秩一更新；若原子没有激活样本，当前实现将全部样本作为更新集合。每轮更新后重新稀疏编码，计算 $`e_k=\|X-DA\|_F/\sqrt{dm}`$，在 $`|e_k-e_{k-1}|<0.0009`$ 或达到 10 轮时停止，初始比较值 $`e_0=0`$。
+The code computes this rank-one update with `svds(local,1)`. If an atom has no active samples, the current implementation uses all samples as its update set. After each round, it recomputes sparse codes and $`e_k=\|X-DA\|_F/\sqrt{dm}`$. It stops when $`|e_k-e_{k-1}|<0.0009`$ or after 10 rounds, with initial comparison value $`e_0=0`$.
 
-设第 $`q`$ 个重建块为 $`\hat{x}_q`$，其权重窗为 $`w_q`$；在全图坐标中只对覆盖当前像素的块求和，得到：
+Let reconstructed patch $`q`$ be $`\hat{x}_q`$ with weight window $`w_q`$. In full-image coordinates, summing only over patches covering the current pixel gives:
 
 ```math
 \hat{I}(i,j)=
@@ -368,9 +405,9 @@ A(t,\mathcal{I}_t)\leftarrow\Sigma(1,1)V(:,1)^{\mathsf T}.
 
 <a id="paper-scale-equations"></a>
 
-#### 论文公式：连续尺度、多字典与高斯融合
+#### Thesis Equations: Continuous Scales, Multiple Dictionaries, and Gaussian Fusion
 
-设像素 $`p`$ 位于三个 TU 中心构成的三角形内，顶点尺度为 $`s_1,s_2,s_3`$，重心坐标为 $`\lambda_1,\lambda_2,\lambda_3`$，则：
+Suppose pixel $`p`$ lies inside a triangle formed by three TU centers, with vertex scales $`s_1,s_2,s_3`$ and barycentric coordinates $`\lambda_1,\lambda_2,\lambda_3`$. Then:
 
 ```math
 \begin{cases}
@@ -380,7 +417,7 @@ s(p)=\lambda_1s_1+\lambda_2s_2+\lambda_3s_3,\\
 \qquad\text{(3-8)}
 ```
 
-三角形内 $`\lambda_k\ge0`$；凸包外用最近邻补全，中心不足或共线时整体回退到最近邻。设 $`\bar{g}_{\mathrm{PU}}(p)`$ 为像素所在 PU 的平均灰度，$`g_{\max}`$ 为所有 PU 平均灰度的最大值，放大后尺度为：
+Inside the triangle, $`\lambda_k\ge0`$. Nearest neighbors fill points outside the convex hull; insufficient or collinear centers trigger a full nearest-neighbor fallback. Let $`\bar{g}_{\mathrm{PU}}(p)`$ be the mean grayscale of the PU containing the pixel, and $`g_{\max}`$ the largest mean grayscale among all PUs. The enlarged scale is:
 
 ```math
 s'(p)=s(p)\left[
@@ -390,9 +427,9 @@ s'(p)=s(p)\left[
 \qquad\text{(3-9)}
 ```
 
-默认 $`\alpha=0.5`$、$`\gamma=6`$，32 对应 `structure_limit`。暗区的放大幅度较大；代码以 $`\max(g_{\max},\mathrm{eps})`$ 防止全黑图除零。随后采用半径 12、窗口 $`25\times25`$ 的均值滤波。为保留论文符号，式（3-10）中的 $`s'`$ 指经过该平滑步骤后的尺度图。
+Defaults are $`\alpha=0.5`$ and $`\gamma=6`$, with 32 corresponding to `structure_limit`. Dark regions receive greater enlargement. The code uses $`\max(g_{\max},\mathrm{eps})`$ to avoid division by zero for all-black images. A mean filter with radius 12 and a $`25\times25`$ window follows. To retain the thesis notation, $`s'`$ in Eq. (3-10) denotes the scale map after this smoothing step.
 
-论文将连续尺度归一化到 $`[4-b_0,4n]`$，这里把原式的下界调节参数 $`b`$ 记为 $`b_0`$，以便与后文块边长 $`b`$ 区分：
+The thesis normalizes continuous scales to $`[4-b_0,4n]`$. Here the original lower-bound adjustment parameter $`b`$ is written as $`b_0`$ to distinguish it from the block side length $`b`$ below:
 
 ```math
 \tilde{s}(p)=(4-b_0)+
@@ -401,7 +438,7 @@ s'(p)=s(p)\left[
 \qquad\text{(3-10)}
 ```
 
-**实现补充：** 代码以 `lower_bound` 直接指定下界 $`a`$，以所选尺度集合 $`\mathcal{B}`$ 的最大值指定上界，默认 $`a=0`$，对应原式 $`b_0=4`$：
+**Implementation supplement:** The code specifies the lower bound $`a`$ directly through `lower_bound`, and takes the maximum of the selected scale set $`\mathcal{B}`$ as the upper bound. The default $`a=0`$ corresponds to $`b_0=4`$ in the original equation:
 
 ```math
 \tilde{s}(p)=a+
@@ -411,9 +448,9 @@ s_{\mathrm{disc}}(p)=\underset{b\in\mathcal{B}}{\mathrm{argmin}}
 \left|\tilde{s}(p)-b\right|.
 ```
 
-若尺度图近似常量，代码直接令连续图和离散图均为 $`\min\mathcal{B}`$；最近尺度并列时取配置中先出现的较小值。独立去噪取 $`n=6`$、$`\mathcal{B}=\{4,8,12,16,20,24\}`$，级联前级取 $`n=3`$、$`\mathcal{B}=\{4,8,12\}`$。
+For a nearly constant scale map, both continuous and discrete maps are set to $`\min\mathcal{B}`$. Ties between nearest scales use the smaller value appearing first in the configuration. Standalone denoising uses $`n=6`$, $`\mathcal{B}=\{4,8,12,16,20,24\}`$; denoising before network inference uses $`n=3`$, $`\mathcal{B}=\{4,8,12\}`$.
 
-属于块边长 $`b`$ 的训练样本矩阵、字典及稀疏系数分别记为 $`X_b,D_b,A_b`$，各活跃尺度独立求解：
+Let $`X_b,D_b,A_b`$ denote the training sample matrix, dictionary, and sparse coefficients for block side length $`b`$. Each active scale is solved independently:
 
 ```math
 \min_{D_b,A_b}\|X_b-D_bA_b\|_F^2,
@@ -421,51 +458,51 @@ s_{\mathrm{disc}}(p)=\underset{b\in\mathcal{B}}{\mathrm{argmin}}
 \qquad\text{(3-11)}
 ```
 
-每个块的向量维数为 $`b^2`$。训练样本来自叠加合成噪声的图像，最终编码块来自当前输入图像。重建后的块按式（3-7）融合，自适应分块采用高斯窗：
+Each patch has vector dimension $`b^2`$. Training samples come from the image with added synthetic noise, while patches for final encoding come from the current input image. Reconstructed patches are fused using Eq. (3-7), with a Gaussian window for adaptive blocks:
 
 ```math
 w_b(i,j)=\exp\left[-\frac{(i-c)^2+(j-c)^2}{2(\eta b)^2}\right].
 \qquad\text{(3-12)}
 ```
 
-其中局部坐标 $`i,j\in\{1,\ldots,b\}`$，$`c=(b+1)/2`$，$`\eta=0.5`$ 对应 `fusion_sigma_ratio`。固定块对照使用 $`w_b(i,j)=1`$，每种固定尺度分别输出一幅图像。
+Local coordinates are $`i,j\in\{1,\ldots,b\}`$, $`c=(b+1)/2`$, and $`\eta=0.5`$ corresponds to `fusion_sigma_ratio`. Fixed-block comparisons use $`w_b(i,j)=1`$ and produce a separate image for each fixed scale.
 
-对应实现：[批量去噪](block_ksvd/batch_denoise.m)、[尺度图](block_ksvd/scale_map.m)、[字典学习](block_ksvd/dictionary_learning.m)、[稀疏编码](block_ksvd/sparse_encode.m)、[重建与融合](block_ksvd/reconstruct_image.m)。
+Implementation: [batch denoising](block_ksvd/batch_denoise.m), [scale maps](block_ksvd/scale_map.m), [dictionary learning](block_ksvd/dictionary_learning.m), [sparse coding](block_ksvd/sparse_encode.m), [reconstruction and fusion](block_ksvd/reconstruct_image.m).
 
-### 4. USR-Mamba 配对训练与独立验证
+### 4. Paired USR-Mamba Training and Independent Validation
 
-`train` 读取 `pairs.csv`，以预处理后的原始 32 线图像为输入、原始 128 线图像为参考。清单包含 `source_id,split,input,reference`，`split` 为 `train`、`val` 或 `test`；训练入口只使用前两者，并核验来源及文件划分。
+`train` reads `pairs.csv`, using preprocessed original 32-line images as inputs and original 128-line images as references. The manifest contains `source_id,split,input,reference`, where `split` is `train`, `val`, or `test`. The training entry point uses only the first two splits and checks source and file separation.
 
 ```mermaid
 flowchart TD
-    Manifest["pairs.csv<br/>原始低／高线数 TIFF"] --> Check["核验来源、路径、尺寸<br/>及集合划分"]
-    Check --> Train["train：四次成对裁切<br/>Lanczos 恢复尺寸<br/>水平翻转"]
-    Train --> Normalize["灰度映射到 -1 至 1"]
-    Normalize --> Generator["USR-Mamba 生成增强图像"]
-    Generator --> L1["与对应 128 线参考计算 L1 损失"]
-    Normalize --> Discriminator["条件 Patch 判别器<br/>真实配对与生成配对<br/>生成配对回放池"]
+    Manifest["pairs.csv<br/>Original low/high beam-line TIFF pairs"] --> Check["Validate sources, paths, dimensions<br/>and dataset splits"]
+    Check --> Train["train: four paired crops<br/>Restore size with Lanczos<br/>Horizontal flips"]
+    Train --> Normalize["Map grayscale to -1 through 1"]
+    Normalize --> Generator["USR-Mamba generates enhanced images"]
+    Generator --> L1["L1 loss against paired 128-line reference"]
+    Normalize --> Discriminator["Conditional Patch discriminator<br/>Real and generated pairs<br/>Generated-pair replay pool"]
     Generator --> Discriminator
-    Discriminator --> Adversarial["最小二乘对抗损失"]
-    L1 --> Update["加权损失与 Adam<br/>交替更新生成器、判别器"]
+    Discriminator --> Adversarial["Least-squares adversarial loss"]
+    L1 --> Update["Weighted losses and Adam<br/>Alternate generator / discriminator updates"]
     Adversarial --> Update
-    Check --> Validation["val：完整配对图像<br/>不裁切、不翻转，灰度归一化"]
-    Update --> Validate["每轮切换到评价模式<br/>无梯度计算验证 L1"]
+    Check --> Validation["val: full image pairs<br/>No crops or flips, grayscale normalization"]
+    Update --> Validate["Evaluation mode after each epoch<br/>Validation L1 without gradients"]
     Validation --> Validate
-    Validate --> Logs["losses.csv<br/>训练 L1、验证 L1 与学习率"]
-    Validate --> Save["按保存周期及最终轮<br/>写入 usr_mamba_NNN.pt"]
-    Parameters["实际实验参数"] --> Config["parameters.json"]
+    Validate --> Logs["losses.csv<br/>Training L1, validation L1, learning rate"]
+    Validate --> Save["Write usr_mamba_NNN.pt<br/>at save intervals and the final epoch"]
+    Parameters["Effective experiment parameters"] --> Config["parameters.json"]
     Parameters --> Update
 ```
 
-默认批量为 1、学习率为 0.0002、Adam 参数为 `(0.5,0.999)`；先恒定学习率训练 30 轮，再线性衰减训练 30 轮。生成器损失为 `10 × L1 + 1 × 最小二乘对抗损失`。每个训练来源得到四组确定的成对裁切，只裁左右和底部 0–32 像素、顶部不变，再通过水平翻转形成八个样本；验证集保持独立。权重默认每 5 轮及最终轮保存，记录模型结构与变体。
+Defaults are batch size 1, learning rate 0.0002, and Adam parameters `(0.5,0.999)`. Training uses 30 epochs at a constant learning rate followed by 30 epochs of linear decay. The generator loss is `10 × L1 + 1 × least-squares adversarial loss`. Each training source produces four deterministic paired crops, removing 0–32 pixels from the left, right, and bottom while keeping the top unchanged; horizontal flips expand these to eight samples. The validation set remains independent. Weights are saved every 5 epochs and at the final epoch by default, recording the model architecture and variant.
 
-`--variant` 支持完整模型 `full`，以及纯卷积瓶颈 `conv_bottleneck`、去傅里叶分支 `no_fourier`、去 SSM 后残差精炼 `no_refinement`、行优先扫描 `raster_scan` 四种结构消融。
+`--variant` supports the full model `full` and four architecture ablations: a convolution-only bottleneck (`conv_bottleneck`), no Fourier branch (`no_fourier`), no residual refinement after the SSM (`no_refinement`), and row-major scanning (`raster_scan`).
 
 <a id="implementation-training-equations"></a>
 
-#### 实现补充：输入、训练损失与学习率
+#### Implementation Supplement: Inputs, Training Losses, and Learning Rate
 
-对 8 位灰度值 $`I`$，网络输入的归一化为 $`x=I/127.5-1`$。设原始 32 线训练输入为 $`x`$，配对 128 线参考为 $`y`$，生成器为 $`G`$，条件判别器为 $`D`$，$`\langle\cdot\rangle`$ 表示对批次及相应像素或判别图元素取均值，则当前训练目标为：
+For 8-bit grayscale value $`I`$, network input normalization is $`x=I/127.5-1`$. Let the original 32-line training input be $`x`$, its paired 128-line reference be $`y`$, the generator be $`G`$, and the conditional discriminator be $`D`$. With $`\langle\cdot\rangle`$ denoting a mean over the batch and relevant pixel or discriminator-map elements, the current training objective is:
 
 ```math
 \begin{aligned}
@@ -481,48 +518,48 @@ flowchart TD
 \end{aligned}
 ```
 
-$`[\cdot;\cdot]`$ 为通道拼接，$`\mathcal{R}`$ 为容量 50、历史替换概率 0.5 的生成配对回放池；`stopgrad` 表示更新判别器时不向生成器回传梯度。损失权重分别由 `l1_weight`、`adversarial_weight` 配置；上式给出默认值，代码还以 `adversarial_weight` 缩放判别器损失，设为 0 时跳过对抗更新。验证集只计算 $`\mathcal{L}_1`$。
+$`[\cdot;\cdot]`$ denotes channel concatenation. $`\mathcal{R}`$ is a generated-pair replay pool of capacity 50 with a historical replacement probability of 0.5. `stopgrad` prevents gradients from reaching the generator during discriminator updates. Loss weights are configured by `l1_weight` and `adversarial_weight`; the equations show their defaults. The code also scales the discriminator loss by `adversarial_weight`; setting it to 0 skips adversarial updates. Validation computes only $`\mathcal{L}_1`$.
 
-设轮次 $`e`$ 从 1 开始，恒定阶段 $`E_c=30`$、衰减阶段 $`E_d=30`$，初始学习率 $`r_0=0.0002`$，代码实际使用：
+With epoch $`e`$ starting at 1, constant-rate phase $`E_c=30`$, decay phase $`E_d=30`$, and initial learning rate $`r_0=0.0002`$, the code uses:
 
 ```math
 r(e)=r_0\left(1-\frac{\max(0,e-E_c)}{E_d+1}\right),
 \qquad e=1,\ldots,E_c+E_d.
 ```
 
-因此最后一轮学习率为 $`r_0/31`$。默认用 Adam、$`\beta_1=0.5`$、$`\beta_2=0.999`$ 交替更新生成器和判别器。
+The final epoch therefore uses learning rate $`r_0/31`$. By default, Adam with $`\beta_1=0.5`$ and $`\beta_2=0.999`$ alternates generator and discriminator updates.
 
-对应实现：[配对数据与划分](usr_mamba/dataset.py)、[训练与验证](usr_mamba/training.py)。
+Implementation: [paired data and splits](usr_mamba/dataset.py), [training and validation](usr_mamba/training.py).
 
-### 5. USR-Mamba 网络与低线数推理
+### 5. USR-Mamba Network and Inference on Images with Fewer Beam Lines
 
-`infer` 加载指定权重及其中记录的模型结构，对 `cascade` 输出的去噪 32 线图像进行增强。以下是默认完整模型的数据流，`H × W` 表示输入的高和宽。
+`infer` loads the specified weights and their recorded model architecture to enhance the denoised 32-line images produced by `cascade`. The following diagram shows the default full model; `H × W` denotes input height and width.
 
 ```mermaid
 flowchart TD
-    Input["去噪 32 线 TIFF 与指定权重"] --> Normalize["灰度映射到 -1 至 1"]
-    Normalize --> E1["7 × 7 卷积<br/>64 通道，H × W"]
-    E1 --> E2["步长 2 卷积<br/>128 通道，H/2 × W/2"]
-    E2 --> E3["步长 2 卷积<br/>256 通道，H/4 × W/4"]
-    E3 --> Bottleneck["9 个瓶颈块<br/>第 1、5、9 块为双域 SSM<br/>其余为残差卷积"]
-    Bottleneck --> D1["拼接对应编码特征并转置卷积<br/>128 通道，H/2 × W/2"]
-    E3 -->|跳跃连接| D1
-    D1 --> D2["拼接对应编码特征并转置卷积<br/>64 通道，H × W"]
-    E2 -->|跳跃连接| D2
-    D2 --> Head["拼接浅层特征<br/>7 × 7 卷积与 Tanh"]
-    E1 -->|跳跃连接| Head
-    Head --> Save["映射回 0 至 255 并裁限<br/>保存 8 位灰度 TIFF"]
+    Input["Denoised 32-line TIFF and selected weights"] --> Normalize["Map grayscale to -1 through 1"]
+    Normalize --> E1["7 × 7 convolution<br/>64 channels, H × W"]
+    E1 --> E2["Stride-2 convolution<br/>128 channels, H/2 × W/2"]
+    E2 --> E3["Stride-2 convolution<br/>256 channels, H/4 × W/4"]
+    E3 --> Bottleneck["9 bottleneck blocks<br/>Dual-domain SSM at blocks 1, 5, 9<br/>Residual convolutions elsewhere"]
+    Bottleneck --> D1["Concatenate matching encoder features<br/>Transposed convolution: 128 channels, H/2 × W/2"]
+    E3 -->|Skip connection| D1
+    D1 --> D2["Concatenate matching encoder features<br/>Transposed convolution: 64 channels, H × W"]
+    E2 -->|Skip connection| D2
+    D2 --> Head["Concatenate shallow features<br/>7 × 7 convolution and Tanh"]
+    E1 -->|Skip connection| Head
+    Head --> Save["Map back to 0 through 255 and clip<br/>Save 8-bit grayscale TIFF"]
 ```
 
-双域 SSM 包含两条分支：空间特征经二维扫描、LayerNorm 和 Mamba 后还原；频域特征经二维 FFT 与中心化，将实部／虚部拼接后扫描建模，再逆变换回空间域。两分支融合后，与输入特征拼接融合，并进行残差卷积精炼。默认扫描顺序为从边界向中心逐层绕行的 `outside_in`。
+The dual-domain SSM has two branches. Spatial features pass through a 2D scan, LayerNorm, and Mamba before being restored to their layout. Frequency features undergo a centered 2D FFT; real and imaginary parts are concatenated, scanned, and modeled, then inverse-transformed to the spatial domain. After branch fusion, the result is concatenated and fused with the input features, followed by residual convolutional refinement. The default scan order, `outside_in`, traverses successive boundaries toward the center.
 
-推理采用评价模式并关闭梯度，输入宽高须能被默认下采样因子 4 整除。输出保留尺寸、样本名和相对目录。原始 32 线输入对照可使用相同权重另行执行 `infer`。
+Inference uses evaluation mode with gradients disabled. Input width and height must be divisible by the default downsampling factor of 4. Outputs retain dimensions, sample names, and relative directories. A comparison using original 32-line inputs can be run separately through `infer` with the same weights.
 
 <a id="paper-mamba-equations"></a>
 
-#### 论文公式：编码、双域状态空间与解码
+#### Thesis Equations: Encoding, Dual-Domain State Space, and Decoding
 
-设 $`I_{\mathrm{LR}}`$ 为低波束线图像，$`I_{\mathrm{HR}}`$ 为高波束线参考，$`U`$ 为输入尺寸变换，$`E`$ 为编码器，$`f_1`$ 为瓶颈输入，$`\{s_l\}_{l=1}^{L}`$ 为跳连特征集合：
+Let $`I_{\mathrm{LR}}`$ be the image with fewer beam lines, $`I_{\mathrm{HR}}`$ the reference with more beam lines, $`U`$ the input size transformation, $`E`$ the encoder, $`f_1`$ the bottleneck input, and $`\{s_l\}_{l=1}^{L}`$ the skip features:
 
 ```math
 \begin{cases}
@@ -532,9 +569,9 @@ X=U(I_{\mathrm{LR}}),\\
 \qquad\text{(4-1)}
 ```
 
-论文允许在预处理已得到目标尺寸时直接使用同尺寸输入。本项目的 32／128 线图像已处于同一像素网格，故这里 $`U`$ 为恒等尺寸映射，灰度另按前述公式归一化。
+The thesis permits same-size inputs when preprocessing has already produced the target dimensions. This project's 32-line/128-line images share the same pixel grid, so $`U`$ is an identity size mapping here; grayscale is normalized separately as described above.
 
-设瓶颈阶段数 $`J=9`$，双域模块位置集合 $`S=\{1,5,9\}`$，则论文的阶段更新为：
+With $`J=9`$ bottleneck stages and dual-domain module positions $`S=\{1,5,9\}`$, the thesis defines stage updates as:
 
 ```math
 \begin{cases}
@@ -548,7 +585,7 @@ f_{j+1}=\mathrm{rCNN}_j(\tilde{f}_j),\quad j=1,\ldots,J.
 \qquad\text{(4-2)}
 ```
 
-$`\mathcal{D}_j`$ 为双域 SSM 模块，$`\mathrm{rCNN}_j`$ 为残差卷积精炼。令 $`\mathcal{F}`$、$`\mathcal{F}^{-1}`$ 分别为傅里叶变换及逆变换，$`\mathcal{R}`$ 将复频谱实部和虚部沿通道拼接，$`\mathcal{R}^{-1}`$ 将其重新组合为复数，则：
+$`\mathcal{D}_j`$ is the dual-domain SSM module and $`\mathrm{rCNN}_j`$ is residual convolutional refinement. Let $`\mathcal{F}`$ and $`\mathcal{F}^{-1}`$ be the Fourier transform and its inverse. $`\mathcal{R}`$ concatenates real and imaginary spectrum components along channels, and $`\mathcal{R}^{-1}`$ recombines them into complex values. Then:
 
 ```math
 \begin{cases}
@@ -561,9 +598,9 @@ u_F=\mathcal{F}^{-1}\!\left(
 \qquad\text{(4-3)}
 ```
 
-其中 $`\mathcal{M}_{I,j}`$、$`\mathcal{M}_{F,j}`$ 分别为空间域和频域分支，$`P_j`$ 为通道投影。此处的 $`\mathcal{R}`$ 是复数重排，与训练小节的回放池符号分别使用。代码对二维 FFT 使用 `fftshift` 中心化，逆变换前使用 `ifftshift`，并取逆变换结果实部；空间序列通道数为 $`C`$，频域实／虚序列通道数为 $`2C`$。
+Here $`\mathcal{M}_{I,j}`$ and $`\mathcal{M}_{F,j}`$ are the spatial and frequency branches, and $`P_j`$ is a channel projection. The complex rearrangement $`\mathcal{R}`$ here is defined separately from the training replay-pool notation. The code centers the 2D FFT with `fftshift`, applies `ifftshift` before inversion, and takes the real part of the inverse result. Spatial sequences have $`C`$ channels; frequency real/imaginary sequences have $`2C`$ channels.
 
-对任一分支输入 $`q`$，论文以通道扩展、局部卷积、门控 SSM 及通道混合描述分支计算：
+For either branch input $`q`$, the thesis describes branch computation using channel expansion, local convolution, a gated SSM, and channel mixing:
 
 ```math
 \begin{cases}
@@ -577,20 +614,20 @@ e_{\mathrm{SSM}}=q+\mathrm{Lin}_{1/\beta}(g\odot M),\\
 \qquad\text{(4-4)}
 ```
 
-$`\mathrm{Lin}_{\beta}`$ 与 $`\mathrm{Lin}_{1/\beta}`$ 分别扩展和压缩通道，$`\mathrm{DWConv}`$ 为深度卷积，$`\sigma`$ 为激活，$`\odot`$ 为逐元素乘法，$`\mathrm{cmConv}`$ 为通道混合卷积。空间分支取 $`q=f_j`$，频域分支取 $`q=\mathcal{R}(\mathcal{F}(f_j))`$。 **实现对应：** 式（4-4）保留论文的模块级表达；当前每个分支具体调用 `LayerNorm` 和 `mamba_ssm.Mamba`，外部再由 `DualDomainState`、`FeatureFusion` 和 `ResidualConvolution` 完成双域融合、输入拼接融合及残差精炼，并未逐项显式搭建式中的所有独立层。
+$`\mathrm{Lin}_{\beta}`$ and $`\mathrm{Lin}_{1/\beta}`$ expand and compress channels, respectively. $`\mathrm{DWConv}`$ is depthwise convolution, $`\sigma`$ an activation, $`\odot`$ elementwise multiplication, and $`\mathrm{cmConv}`$ channel-mixing convolution. The spatial branch uses $`q=f_j`$; the frequency branch uses $`q=\mathcal{R}(\mathcal{F}(f_j))`$. **Implementation correspondence:** Eq. (4-4) retains the thesis's module-level expression. Each current branch calls `LayerNorm` and `mamba_ssm.Mamba`; `DualDomainState`, `FeatureFusion`, and `ResidualConvolution` then perform dual-domain fusion, input concatenation/fusion, and residual refinement. The code does not explicitly instantiate every independent layer shown in the equation.
 
-解码器 $`D`$ 融合瓶颈输出与跳连特征：
+Decoder $`D`$ combines the bottleneck output with skip features:
 
 ```math
 \hat{I}_{\mathrm{HR}}=D\left(f_{J+1},\{s_l\}_{l=1}^{L}\right).
 \qquad\text{(4-5)}
 ```
 
-此处 $`D`$ 指解码器，与训练小节中的判别器分别使用。当前输出头使用 Tanh，保存前按 $`\mathrm{clip}(127.5(\hat{y}+1),0,255)`$ 映射回灰度并转换为 8 位 TIFF。
+Here $`D`$ denotes the decoder, separately from the discriminator in the training section. The current output head uses Tanh; before saving, $`\mathrm{clip}(127.5(\hat{y}+1),0,255)`$ maps the output back to grayscale for conversion to 8-bit TIFF.
 
-#### 论文公式：扫描序列与状态更新
+#### Thesis Equations: Scan Sequence and State Updates
 
-设特征图大小为 $`H\times W`$，扫描路径 $`p(n)=(h[n],w[n])`$ 是二维位置的一个排列，$`n=1,\ldots,HW`$，通道索引为 $`c`$。序列化、状态递推与逆排列还原为：
+For feature-map size $`H\times W`$, the scan path $`p(n)=(h[n],w[n])`$ is a permutation of 2D positions, with $`n=1,\ldots,HW`$ and channel index $`c`$. Serialization, state recurrence, and inverse-permutation restoration are:
 
 ```math
 \begin{cases}
@@ -602,40 +639,40 @@ M[p(n),c]=z_{\mathrm{out}}[n,c].
 \qquad\text{(4-6)}
 ```
 
-$`\ell[n,c]`$ 为隐藏状态，$`\bar{A}`$ 为状态转移参数，$`\bar{B}[n]`$、$`\bar{C}[n]`$ 为输入相关参数。扫描只改变排列，不改变特征数量，也不进行插值。论文正文将角向均匀扫描描述为由中心向外的近似螺旋路径；当前配置默认 `outside_in`，实现为沿矩形边界逐层向中心绕行，`inside_out` 为其逆序。式（4-6）适用于这些排列，但两种方向不应视作同一实验设置，具体复现以保存的 `scan_order` 为准。
+$`\ell[n,c]`$ is the hidden state, $`\bar{A}`$ the state-transition parameter, and $`\bar{B}[n]`$ and $`\bar{C}[n]`$ input-dependent parameters. Scanning changes only the permutation; it neither changes the number of features nor interpolates them. The thesis describes angularly uniform scanning as an approximate spiral from the center outward. The current default, `outside_in`, follows rectangular boundaries toward the center; `inside_out` reverses this order. Eq. (4-6) applies to these permutations, but the two directions should be treated as separate experiment settings. Reproduction should follow the saved `scan_order`.
 
-对应实现：[网络结构](usr_mamba/network.py)、[推理与图像保存](usr_mamba/inference.py)。
+Implementation: [network architecture](usr_mamba/network.py), [inference and image saving](usr_mamba/inference.py).
 
-### 6. 定量评价与分组统计
+### 6. Quantitative Evaluation and Group Statistics
 
-`evaluate` 读取 `evaluation.csv`，每行指定参考图像、方法结果及可选的连续尺度图、ROI、TU 和掩码。结果与参考必须处于相同像素坐标系；原始输入、固定块去噪、自适应去噪和网络增强结果可分别建立清单进行比较。
+`evaluate` reads `evaluation.csv`. Each row specifies a reference image, a method result, and optional continuous scale map, ROI, TU, and mask inputs. Results and references must share the same pixel coordinates. Separate manifests can compare original inputs, fixed-block denoising, adaptive denoising, and network-enhanced results.
 
 ```mermaid
 flowchart TD
-    Manifest["evaluation.csv<br/>样本、分组、结果、参考<br/>与可选标注"] --> Check["核验路径并读取对齐图像"]
-    Check --> Whole["全图 CNR、ENL<br/>相对参考的 EPI 与 FSIM"]
-    Check --> Region["结果图像与连续尺度图<br/>分区 CNR"]
-    Check --> Width["结果图像与 ROI<br/>重心校正、区间扩张<br/>半高交点插值"]
-    Width --> FWHM["横向／纵向 FWHM，单位为像素"]
-    Check --> Partition["TU 与二值掩码<br/>按 TU 中心归类并统计尺寸"]
-    Check --> LPIPS["可选 --lpips<br/>结果／参考灰度复制为三通道<br/>计算感知距离"]
-    Whole --> Metrics["metrics.csv：逐样本指标"]
+    Manifest["evaluation.csv<br/>Sample, group, result, reference<br/>and optional annotations"] --> Check["Validate paths and read aligned images"]
+    Check --> Whole["Whole-image CNR and ENL<br/>EPI and FSIM against reference"]
+    Check --> Region["Result image and continuous scale map<br/>Regional CNR"]
+    Check --> Width["Result image and ROI<br/>Centroid correction, interval expansion<br/>Half-maximum intersection interpolation"]
+    Width --> FWHM["Horizontal / vertical FWHM in pixels"]
+    Check --> Partition["TU and binary mask<br/>Classify by TU center and summarize sizes"]
+    Check --> LPIPS["Optional --lpips<br/>Replicate result / reference grayscale into 3 channels<br/>Compute perceptual distance"]
+    Whole --> Metrics["metrics.csv: per-sample metrics"]
     Region --> Metrics
     FWHM --> Metrics
     Partition --> Metrics
     LPIPS --> Metrics
-    Metrics --> Groups["按 group 对有效值取均值<br/>写入 group_means.csv"]
+    Metrics --> Groups["Average valid values by group<br/>Write group_means.csv"]
 ```
 
-全图 `global_cnr` 使用均值／样本标准差，ENL 使用均值平方／样本方差；EPI 使用 Sobel 梯度相关。FSIM 使用多尺度 LoG 相位响应近似，具体口径见[复现指南](docs/reproduction.md)。尺度分区 CNR 默认将连续尺度图的 `[0,4)` 作为目标、`(8,12]` 作为背景、`[0,12]` 作为噪声统计范围。
+Whole-image `global_cnr` uses mean / sample standard deviation, and ENL uses squared mean / sample variance. EPI uses Sobel-gradient correlation. FSIM approximates phase responses with multiscale LoG; see the [reproduction guide](docs/reproduction.md) for its exact definition. By default, regional CNR treats continuous scales in `[0,4)` as the target, `(8,12]` as the background, and `[0,12]` as the noise-statistics range.
 
-缺少对应尺度图、ROI 或 TU／掩码时，相关指标保留为缺失值（NaN）；LPIPS 通过 `--lpips` 显式启用，需要额外特征评价依赖和公开特征权重。
+Metrics requiring a missing scale map, ROI, or TU / mask remain missing (NaN). LPIPS is explicitly enabled with `--lpips` and requires the additional perceptual-evaluation dependencies and public feature weights.
 
 <a id="paper-metric-equations"></a>
 
-#### 论文公式：全图统计与结构保持
+#### Thesis Equations: Whole-Image Statistics and Structure Preservation
 
-设待评价图像有 $`N`$ 个像素，灰度均值为 $`\mu`$，样本方差为 $`\sigma^2=\frac{1}{N-1}\sum_p(I(p)-\mu)^2`$。第 3 章的全图 CNR 与 ENL 为：
+Let the evaluated image have $`N`$ pixels, mean grayscale $`\mu`$, and sample variance $`\sigma^2=\frac{1}{N-1}\sum_p(I(p)-\mu)^2`$. Chapter 3 defines whole-image CNR and ENL as:
 
 ```math
 \mathrm{CNR}=\frac{\mu}{\sigma}.
@@ -647,9 +684,9 @@ flowchart TD
 \qquad\text{(3-14)}
 ```
 
-当前 CSV 中分别为 `global_cnr`、`enl`，均按整幅结果图计算，分母以 `eps` 保护；非退化情形下有 $`\mathrm{ENL}=\mathrm{global\_cnr}^2`$。这两个量反映均值与波动的关系，应结合结构指标解读。
+The current CSV fields are `global_cnr` and `enl`, both computed over the entire result image with denominators protected by `eps`. In nondegenerate cases, $`\mathrm{ENL}=\mathrm{global\_cnr}^2`$. These quantities reflect the relationship between mean and variation and should be interpreted alongside structural metrics.
 
-令 $`\nabla I`$ 表示 Sobel 梯度幅值，去噪前后边缘保持指数为：
+Let $`\nabla I`$ denote Sobel gradient magnitude. The edge preservation index before and after denoising is:
 
 ```math
 \mathrm{EPI}=\mathrm{corr}
@@ -657,9 +694,9 @@ flowchart TD
 \qquad\text{(3-15)}
 ```
 
-`evaluate` 实际以清单中的 `reference` 和 `result` 计算该相关系数。若任一梯度图标准差小于 `eps`，当前代码约定 EPI 为 1，此时不应将其解读为充分的边缘保持证据。
+`evaluate` computes this correlation between the manifest's `reference` and `result`. If either gradient map has standard deviation below `eps`, the code defines EPI as 1; this case should not be interpreted as sufficient evidence of edge preservation.
 
-设 $`S_{\mathrm{GM}}`$、$`S_{\mathrm{PC}}`$ 为梯度幅值与相位一致性相似图，$`\mathrm{PC}_m`$ 为两张相位一致性图的逐像素最大值，FSIM 定义为：
+Let $`S_{\mathrm{GM}}`$ and $`S_{\mathrm{PC}}`$ be gradient-magnitude and phase-congruency similarity maps, and $`\mathrm{PC}_m`$ the pixelwise maximum of the two phase-congruency maps. FSIM is defined as:
 
 ```math
 \mathrm{FSIM}=
@@ -668,7 +705,7 @@ flowchart TD
 \qquad\text{(3-16)}
 ```
 
-**实现补充：** 当前程序用 Scharr 梯度幅值 $`G_1,G_2`$ 和多尺度 LoG 响应 $`P_1,P_2`$ 计算上述结构，其中 $`P`$ 是相位响应的近似：
+**Implementation supplement:** The program uses Scharr gradient magnitudes $`G_1,G_2`$ and multiscale LoG responses $`P_1,P_2`$ in this structure, where $`P`$ approximates the phase response:
 
 ```math
 \begin{aligned}
@@ -683,11 +720,11 @@ S_{\mathrm{PC}}&=\frac{2P_1P_2+T_P}{P_1^2+P_2^2+T_P},
 \end{aligned}
 ```
 
-$`*`$ 表示卷积，其他乘法、平方和最大值按像素计算，图像采用 `[0,1]` 灰度。该 FSIM 使用 LoG 近似，与通用相位一致性实现的数值口径有别。
+$`*`$ denotes convolution; other products, squares, and maxima are pixelwise, with image grayscale in `[0,1]`. This LoG approximation gives FSIM a different numerical definition from a general phase-congruency implementation.
 
-#### 论文公式：亮点响应与尺度区域评价
+#### Thesis Equations: Point Responses and Scale-Region Evaluation
 
-设 $`f(t)`$ 为经 ROI 重心校正后提取的一维水平或垂直灰度剖面，半峰值左右交点为 $`t_L,t_R`$，则：
+Let $`f(t)`$ be a horizontal or vertical 1D grayscale profile extracted after ROI centroid correction, with half-maximum intersections $`t_L,t_R`$. Then:
 
 ```math
 \mathrm{FWHM}=t_R-t_L,
@@ -696,9 +733,9 @@ f(t_L)=f(t_R)=\frac12\max_t f(t).
 \qquad\text{(3-17)}
 ```
 
-代码先以 ROI 内灰度不低于局部最大值 90% 的像素求灰度加权质心，将 ROI 中心向其移动，单方向漂移不超过该方向 ROI 长度的 25%；随后提取穿过调整后 ROI 中心的剖面。若半高范围触及边界，按原区间长度的 25% 逐步扩张，在相邻采样点间线性插值确定交点。单位为像素；第 4 章重点报告亮点组 `fwhm_x`，与原生 128 线参考比较。
+The code first computes a grayscale-weighted centroid from ROI pixels at least 90% as bright as the local maximum. It shifts the ROI center toward that centroid, limiting movement in each direction to 25% of the ROI's length along that direction, then extracts profiles through the adjusted center. If the half-maximum interval reaches a boundary, the interval expands in steps of 25% of its original length; linear interpolation between adjacent samples locates intersections. Units are pixels. Chapter 4 emphasizes `fwhm_x` for the point group, compared with the native 128-line reference.
 
-对于块大小类别 $`b`$ 对应的区域 $`\Omega_b`$、像素评价量图 $`Q(p)`$ 和与重建一致的高斯权重 $`w_b(p)`$，论文给出的区域平均评价为：
+For region $`\Omega_b`$ corresponding to block-size class $`b`$, a pixelwise metric map $`Q(p)`$, and Gaussian weights $`w_b(p)`$ consistent with reconstruction, the thesis gives the regional mean evaluation as:
 
 ```math
 \bar{Q}_b=
@@ -707,11 +744,11 @@ f(t_L)=f(t_R)=\frac12\max_t f(t).
 \qquad\text{(3-18)}
 ```
 
-该式用于论文中按尺度分析局部贡献；当前 `evaluate` 入口尚未导出式（3-18）的逐尺度加权结果，`group_means.csv` 是按清单 `group` 对有效单图指标取算术均值，两者含义不同。
+This equation analyzes local contributions by scale in the thesis. The current `evaluate` entry point does not export the per-scale weighted results of Eq. (3-18). `group_means.csv` instead takes arithmetic means of valid per-image metrics within each manifest `group`; these have different meanings.
 
-#### 实现补充：第 4 章分区 CNR、感知距离与 TU 统计
+#### Implementation Supplement: Chapter 4 Regional CNR, Perceptual Distance, and TU Statistics
 
-第 4 章按连续尺度图 $`\tilde{s}`$ 自动划分目标、背景及噪声区域，具体阈值和计算为：
+Chapter 4 automatically partitions target, background, and noise regions using continuous scale map $`\tilde{s}`$, with the following thresholds and calculation:
 
 ```math
 \begin{aligned}
@@ -724,13 +761,13 @@ f(t_L)=f(t_R)=\frac12\max_t f(t).
 \end{aligned}
 ```
 
-$`\mu_\Omega`$、$`\sigma_\Omega`$ 为结果图在区域 $`\Omega`$ 内的均值与样本标准差，CSV 字段为 `cnr`。该定义与式（3-13）的 `global_cnr` 分开报告；三类区域任一为空时保留 NaN。阈值由 `cnr_target`、`cnr_background`、`cnr_noise` 配置。
+$`\mu_\Omega`$ and $`\sigma_\Omega`$ are the result image's mean and sample standard deviation in region $`\Omega`$. The CSV field is `cnr`, reported separately from `global_cnr` in Eq. (3-13). If any of the three regions is empty, the result remains NaN. Thresholds are configured by `cnr_target`, `cnr_background`, and `cnr_noise`.
 
-LPIPS 的当前调用可写为 $`d_{\mathrm{LPIPS}}=\mathrm{LPIPS}_{\mathrm{AlexNet}}(T(I_{\mathrm{result}}),T(I_{\mathrm{reference}}))`$，其中 $`T`$ 将 8 位灰度复制为三通道并映射至 $`[-1,1]`$，数值越低表示感知特征越接近参考。
+The current LPIPS call can be written as $`d_{\mathrm{LPIPS}}=\mathrm{LPIPS}_{\mathrm{AlexNet}}(T(I_{\mathrm{result}}),T(I_{\mathrm{reference}}))`$, where $`T`$ replicates 8-bit grayscale into three channels and maps it to $`[-1,1]`$. Lower values indicate perceptual features closer to the reference.
 
-论文还讨论了 PSNR 的局限；为便于对照，其定义为 $`\mathrm{MSE}=\frac1N\sum_p(I_{\mathrm{result}}(p)-I_{\mathrm{reference}}(p))^2`$、$`\mathrm{PSNR}=10\log_{10}(M^2/\mathrm{MSE})`$，$`M`$ 为灰度满量程（8 位灰度为 255，归一化灰度为 1）。当前评价入口未导出 PSNR；它也不是论文主要的增强评价指标。
+The thesis also discusses PSNR's limitations. For comparison, its definition is $`\mathrm{MSE}=\frac1N\sum_p(I_{\mathrm{result}}(p)-I_{\mathrm{reference}}(p))^2`$, $`\mathrm{PSNR}=10\log_{10}(M^2/\mathrm{MSE})`$, where $`M`$ is the full grayscale range (255 for 8-bit grayscale, 1 for normalized grayscale). The current evaluation entry point does not export PSNR, and it is not a primary enhancement metric in the thesis.
 
-TU 统计按块中心是否位于二值掩码内分为 ROI 与背景。设两类 TU 集合为 $`\mathcal{T}_r,\mathcal{T}_b`$，TU 边长为 $`s_t`$，则 `roi_tu_mean`、`background_tu_mean` 与 `tu_ratio` 对应：
+TU statistics separate ROI and background according to whether each block center falls inside the binary mask. Let the two TU sets be $`\mathcal{T}_r,\mathcal{T}_b`$ and TU side length be $`s_t`$. Then `roi_tu_mean`, `background_tu_mean`, and `tu_ratio` correspond to:
 
 ```math
 \bar{s}_r=\frac{1}{|\mathcal{T}_r|}\sum_{t\in\mathcal{T}_r}s_t,
@@ -739,17 +776,17 @@ TU 统计按块中心是否位于二值掩码内分为 ROI 与背景。设两类
 \qquad \rho_{\mathrm{TU}}=\frac{\bar{s}_b}{\bar{s}_r}.
 ```
 
-这是按 TU 个数计算的边长均值，不按块面积加权。缺少 TU／掩码时输出 NaN；提供标注但某类为空时，代码将该类均值置 0，ROI 均值为 0 时比值置 Inf。
+These are mean side lengths by TU count, without area weighting. Missing TU / mask inputs produce NaN. If annotations are supplied but a class is empty, the code sets that class mean to 0; a zero ROI mean yields a ratio of Inf.
 
-对应实现：[评价入口](evaluation/runner.py)、[MATLAB 批量指标](evaluation/evaluate_batch.m)。
+Implementation: [evaluation entry point](evaluation/runner.py), [MATLAB batch metrics](evaluation/evaluate_batch.m).
 
-## 运行与复现
+## Running and Reproducing Experiments
 
-依次使用 `beamform`（可选）、`prepare`、`prior`、`denoise` 准备图像；通过 `train` 得到权重后执行 `infer`，最后通过 `evaluate` 汇总结果。已有兼容权重时可直接进入推理；`fixed` 及各网络变体用于独立对照。输入清单、标注和数据划分需事先准备。
+Prepare images with `beamform` (optional), `prepare`, `prior`, and `denoise` in sequence. Run `train` to obtain weights, then `infer`, and finally `evaluate` to summarize results. Compatible existing weights allow direct inference. `fixed` and the network variants provide separate comparisons. Input manifests, annotations, and data splits must be prepared in advance.
 
-环境安装、编码器构建和各阶段命令见[复现指南](docs/reproduction.md)，输入与清单格式见[数据契约](docs/data_contract.md)，已完成的合成验证及实测范围见[验证记录](docs/validation.md)。
+See the [reproduction guide](docs/reproduction.md) for environment setup, encoder builds, and stage commands; the [data contract](docs/data_contract.md) for input and manifest formats; and the [validation record](docs/validation.md) for completed synthetic checks and the scope of actual testing.
 
-归档包含流程源码、参数、必要许可证与论文，不包含采集数据、样本清单、ROI 实测标注、权重、实验结果、安装环境、编译产物或开发备份。运行目录默认排除在 Git 之外。
+The archive includes pipeline source, parameters, required licenses, and the thesis. It excludes acquisition data, sample manifests, measured ROI annotations, weights, experiment results, installed environments, build artifacts, and development backups. Runtime directories are ignored by Git by default.
 
 ```sh
 python -B run.py --help

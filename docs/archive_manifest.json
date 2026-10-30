@@ -149,8 +149,13 @@
     },
     {
       "path": "README.md",
-      "bytes": 39000,
-      "sha256": "e4c42ca5a96f8a567ddbda158aa2802a7d14b0c761ebc1bf453047b81a79f4a4"
+      "bytes": 47248,
+      "sha256": "af4073c43459ee5cb16fd8f942a1ccaee0aa3ed27f1f6aa44c72ef4b26e1e85b"
+    },
+    {
+      "path": "README_zh-CN.md",
+      "bytes": 40886,
+      "sha256": "83cb1a31b2dbf88e57d640f8ad822bfbd6cab556c89d483d611ab9a17a4785ce"
     },
     {
       "path": "requirements-perceptual.txt",
@@ -179,8 +184,8 @@
     },
     {
       "path": "tools/verify_archive.py",
-      "bytes": 3592,
-      "sha256": "37d632ee495924fead6d846892c84dd8f54c31fcb03dbc0cef614e8655a685a2"
+      "bytes": 3611,
+      "sha256": "bdb51943cbbce3c2d9ccef4e52a9881366f84896f95e2a19664061ab4f4ef564"
     },
     {
       "path": "usr_mamba/dataset.py",
