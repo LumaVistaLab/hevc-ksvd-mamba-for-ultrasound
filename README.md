@@ -6,52 +6,58 @@
 
 ## 完整流程图
 
-实线表示主要处理和数据依赖，虚线表示可选对照或辅助评价输入。图中的阶段名与 `run.py` 子命令对应；训练、推理和评价通过清单、权重及输出目录衔接，需要分别执行。
+实线表示主要处理和数据依赖，虚线表示可选对照或辅助评价输入。图中的阶段名与 `run.py` 子命令对应；训练、推理和评价通过清单、权重及输出目录衔接，需要分别执行。阶段编号与下方分步说明一致，以边框颜色区分阶段，文字和底色跟随显示主题。
 
 ```mermaid
 flowchart TD
-    subgraph data [数据准备与成像]
-        RF["RF 通道数据<br/>与采集参数"] --> BF["beamform<br/>延迟求和与包络检测<br/>对数压缩与扫描转换"]
-        BF --> BM["32 线／128 线 B 模式图像"]
-        Existing["已有 B 模式图像"] --> BM
-        BM --> Prep["prepare<br/>灰度校验、裁剪与缩放"]
-        Prep --> Low["原始 32 线 TIFF"]
-        Prep --> High["原始 128 线 TIFF"]
-        Prep --> PGM["同像素 PGM"]
-    end
+    %% 阶段标题放在普通节点中，避免跨子图连线穿过分组标题与边界。
+    RF["RF 通道数据<br/>与采集参数"] --> BF["1. RF 成像（可选）<br/>beamform<br/>延迟求和、包络与扫描转换"]
+    BF --> BM["32 线／128 线 B 模式图像"]
+    Existing["已有 B 模式图像"] --> BM
+    BM --> Prep["1. 图像预处理<br/>prepare<br/>灰度校验、裁剪与缩放"]
+    Prep --> Low["原始 32 线 TIFF"]
+    Prep --> High["原始 128 线 TIFF"]
+    Prep --> PGM["同像素 PGM"]
 
-    subgraph prior [结构先验与自适应去噪]
-        PGM --> HEVC["prior<br/>对待处理低线数图像<br/>进行 HEVC 编码"]
-        HEVC --> Stream["HEVC 码流"]
-        HEVC --> Blocks["TU／PU 分块数组"]
-        Blocks --> Maps["TU 插值与 PU 灰度调节<br/>平滑与尺度选择"]
-        Low --> Maps
-        Maps --> KSVD["denoise<br/>按尺度学习字典、稀疏编码<br/>高斯加权重建"]
-        Low --> KSVD
-        KSVD --> Denoised["去噪 TIFF<br/>连续／离散尺度图与耗时"]
-    end
+    PGM --> HEVC["2. HEVC 结构先验<br/>prior<br/>对待处理低线数图像编码"]
+    HEVC --> Stream["HEVC 码流"]
+    HEVC --> Blocks["TU／PU 分块数组"]
+    Blocks --> Maps["3. 自适应尺度图<br/>TU 插值与 PU 灰度调节<br/>平滑与尺度选择"]
+    Low --> Maps
+    Maps --> KSVD["3. Block K-SVD 去噪<br/>denoise<br/>字典学习、稀疏编码与加权重建"]
+    Low --> KSVD
+    KSVD --> Denoised["去噪 TIFF<br/>连续／离散尺度图与耗时"]
 
-    subgraph learning [网络训练与增强]
-        Low -->|train / val| Pairs["pairs.csv<br/>按来源划分的原始配对图像"]
-        High -->|train / val| Pairs
-        Pairs --> Train["train<br/>训练集增强、对抗训练<br/>独立验证"]
-        Train --> Weights["USR-Mamba 权重<br/>参数与损失记录"]
-        Denoised -->|cascade 三尺度的测试图像| Infer["infer<br/>加载权重并增强 32 线图像"]
-        Weights --> Infer
-        Infer --> Enhanced["增强 TIFF<br/>保持输入尺寸与相对目录"]
-    end
+    Low -->|train / val| Pairs["pairs.csv<br/>按来源划分的原始配对图像"]
+    High -->|train / val| Pairs
+    Pairs --> Train["4. USR-Mamba 训练<br/>train<br/>训练集增强、对抗训练与验证"]
+    Train --> Weights["USR-Mamba 权重<br/>参数与损失记录"]
+    Denoised -->|cascade 测试图像| Infer["5. 低线数图像增强<br/>infer<br/>加载权重并增强 32 线图像"]
+    Weights --> Infer
+    Infer --> Enhanced["增强 TIFF<br/>保持输入尺寸与相对目录"]
 
-    subgraph evaluation [对照与定量评价]
-        Low -.-> Fixed["fixed<br/>各固定尺度独立重建"]
-        Fixed -.-> Eval["evaluate<br/>依据 evaluation.csv 计算指标"]
-        Low -.->|原始图像对照| Eval
-        Denoised -.->|独立去噪结果或连续尺度图| Eval
-        Blocks -.->|TU 数组| Eval
-        Annotations["ROI 与二值掩码（可选）"] -.-> Eval
-        High -->|测试集参考| Eval
-        Enhanced --> Eval
-        Eval --> Reports["metrics.csv：单图指标<br/>group_means.csv：分组均值"]
-    end
+    Low -.-> Fixed["3. 固定块对照<br/>fixed<br/>各固定尺度独立重建"]
+    Fixed -.-> Eval["6. 定量评价<br/>evaluate<br/>依据 evaluation.csv 计算指标"]
+    Low -.->|原始图像对照| Eval
+    Denoised -.->|去噪对照／连续尺度图| Eval
+    Blocks -.->|TU 数组| Eval
+    Annotations["ROI 与二值掩码（可选）"] -.-> Eval
+    High -->|测试集参考| Eval
+    Enhanced --> Eval
+    Eval --> Reports["metrics.csv：单图指标<br/>group_means.csv：分组均值"]
+
+    classDef imaging stroke:#6688cc,stroke-width:2px;
+    classDef structure stroke:#c49a3a,stroke-width:2px;
+    classDef denoising stroke:#57a373,stroke-width:2px;
+    classDef training stroke:#a079c2,stroke-width:2px;
+    classDef inference stroke:#4c9eaa,stroke-width:2px;
+    classDef metrics stroke:#cf7a70,stroke-width:2px;
+    class RF,BF,BM,Existing,Prep,Low,High,PGM imaging;
+    class HEVC,Stream,Blocks structure;
+    class Maps,KSVD,Denoised,Fixed denoising;
+    class Pairs,Train,Weights training;
+    class Infer,Enhanced inference;
+    class Annotations,Eval,Reports metrics;
 ```
 
 Block K-SVD 提供两组配置：`cascade` 使用 4、8、12 三种块尺寸，作为 USR-Mamba 前级；`denoising` 使用 4、8、12、16、20、24 六种块尺寸，用于独立去噪实验。完整图中的 `denoise` 按所选配置分别运行，`fixed` 为各固定块尺寸生成独立对照结果。
