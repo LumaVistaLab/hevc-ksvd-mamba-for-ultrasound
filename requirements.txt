@@ -1,0 +1,5 @@
+numpy>=1.26,<3
+Pillow>=10,<13
+torch>=2.2,<3
+mamba-ssm>=2,<3
+causal-conv1d>=1.4,<2

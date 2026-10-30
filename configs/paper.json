@@ -1,0 +1,169 @@
+{
+  "version": 1,
+  "seed": 2026,
+  "imaging": {
+    "crop_xyxy": [
+      0,
+      0,
+      750,
+      1125
+    ],
+    "output_wh": [
+      512,
+      768
+    ],
+    "resampling": "bilinear",
+    "rf": {
+      "sound_speed": 1540.0,
+      "elements": 128,
+      "aperture_cycles": 188.0235,
+      "delay_cycle_offset": 1.0,
+      "output_height": 1200,
+      "dynamic_range_db": 50.0,
+      "log_scale": 2.1166666666666667
+    }
+  },
+  "hevc": {
+    "quality_index": 0,
+    "gradient_threshold": 2,
+    "boost_offset": 1,
+    "boost_limit": 12,
+    "distortion_weight_limit": 24,
+    "rate_weight_floor": 1,
+    "zero_multiplier": 9,
+    "zero_shift": 2,
+    "zero_reduction_shift": 1,
+    "structure_weight": 1,
+    "distortion_weights": [
+      11,
+      11,
+      11,
+      5,
+      1
+    ],
+    "rate_weights": [
+      1,
+      4,
+      16,
+      29,
+      23
+    ]
+  },
+  "block_ksvd": {
+    "profiles": {
+      "denoising": [
+        4,
+        8,
+        12,
+        16,
+        20,
+        24
+      ],
+      "cascade": [
+        4,
+        8,
+        12
+      ]
+    },
+    "dictionary": {
+      "atoms": 512,
+      "sparsity_ratio": 0.1,
+      "iterations": 10,
+      "residual_tolerance": 46225.0,
+      "convergence_tolerance": 0.0009
+    },
+    "noise": {
+      "impulse_density": 0.003,
+      "dilation_size": 3,
+      "gaussian_sigma": 0.001
+    },
+    "scale": {
+      "lower_bound": 0.0,
+      "structure_limit": 32.0,
+      "zoom_strength": 0.5,
+      "zoom_gamma": 6.0,
+      "smoothing_radius": 12,
+      "constant_tolerance": 1e-12
+    },
+    "fusion_sigma_ratio": 0.5
+  },
+  "usr_mamba": {
+    "input_channels": 1,
+    "output_channels": 1,
+    "channels": [
+      64,
+      128,
+      256
+    ],
+    "bottleneck_depth": 9,
+    "ssm_positions": [
+      1,
+      5,
+      9
+    ],
+    "state_size": 16,
+    "state_conv": 4,
+    "state_expansion": 2,
+    "scan_order": "outside_in",
+    "feature_kernel": 3,
+    "image_kernel": 7,
+    "norm_epsilon": 1e-05,
+    "batch_momentum": 0.1,
+    "feature_bias": false,
+    "output_bias": true
+  },
+  "training": {
+    "crop_count": 4,
+    "crop_max_pixels": 32,
+    "crop_resampling": "lanczos",
+    "horizontal_flip": true,
+    "batch_size": 1,
+    "workers": 0,
+    "constant_epochs": 30,
+    "decay_epochs": 30,
+    "learning_rate": 0.0002,
+    "adam_betas": [
+      0.5,
+      0.999
+    ],
+    "l1_weight": 10.0,
+    "adversarial_weight": 1.0,
+    "replay_capacity": 50,
+    "replay_probability": 0.5,
+    "discriminator_width": 64,
+    "discriminator_depth": 3,
+    "discriminator_max_multiplier": 8,
+    "discriminator_norm_epsilon": 1e-05,
+    "discriminator_kernel": 4,
+    "discriminator_slope": 0.2,
+    "initialization_sigma": 0.02,
+    "save_every": 5
+  },
+  "evaluation": {
+    "cnr_target": [
+      0,
+      4
+    ],
+    "cnr_background": [
+      8,
+      12
+    ],
+    "cnr_noise": [
+      0,
+      12
+    ],
+    "fsim_gradient_constant": 0.0026,
+    "fsim_phase_constant": 0.85,
+    "fsim_scales": [
+      1,
+      2,
+      4
+    ],
+    "fsim_kernel_radius": 3,
+    "roi_brightness_fraction": 0.9,
+    "roi_drift_fraction": 0.25,
+    "roi_expansion_fraction": 0.25,
+    "half_height_fraction": 0.5,
+    "lpips_network": "alex"
+  }
+}

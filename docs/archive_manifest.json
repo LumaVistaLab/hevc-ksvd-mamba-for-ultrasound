@@ -1,0 +1,206 @@
+{
+  "version": 1,
+  "binary_exception": "thesis.pdf",
+  "files": [
+    {
+      "path": ".gitignore",
+      "bytes": 702,
+      "sha256": "2bda399d9fa32906c489671770e36dfe3a136a3ad1127c057b6ec8e8c7a8e68c"
+    },
+    {
+      "path": "block_ksvd/batch_denoise.m",
+      "bytes": 2551,
+      "sha256": "3662d1f9ce88396cf6fc00659744c10be16c4633b51b0b06549b485d30d8bd0d"
+    },
+    {
+      "path": "block_ksvd/dictionary_learning.m",
+      "bytes": 1507,
+      "sha256": "0f7e97edf45424e505f18a70132ffce762b9b0c96c8c3e0a2879c4742e931acc"
+    },
+    {
+      "path": "block_ksvd/reconstruct_image.m",
+      "bytes": 2742,
+      "sha256": "0b9e2f940902e90df2581ab0e137b81fba692c72b492b1aaa7cdee7f66a50caf"
+    },
+    {
+      "path": "block_ksvd/scale_map.m",
+      "bytes": 3323,
+      "sha256": "8cf6cece576d6cd465364bfbd27f535b63062961eec9215fa819a1a2f4096d43"
+    },
+    {
+      "path": "block_ksvd/sparse_encode.m",
+      "bytes": 793,
+      "sha256": "70daa8e0e016ab312d6d527deb24d0eec315657692ced7a840f9b1d5d206bcf7"
+    },
+    {
+      "path": "CMakeLists.txt",
+      "bytes": 397,
+      "sha256": "cf4ba01c8ad4bca26f8011af725e937f9141d59a1dc89d34fbe485fad75ecb2f"
+    },
+    {
+      "path": "common/config.py",
+      "bytes": 1200,
+      "sha256": "6ea347d98424d154cfebe05bcc312188cdd8e62210c08d748bd0b522012f1036"
+    },
+    {
+      "path": "common/files.py",
+      "bytes": 1511,
+      "sha256": "b0128fed70f4f2f2cd25b20da7a418ed1aa1611c21f4097a2d47e59f2ff8a262"
+    },
+    {
+      "path": "common/matlab.py",
+      "bytes": 993,
+      "sha256": "f88e45a05cac66a41218fe52b1f0aa0ed8b580110c2ad8e7819224904d853811"
+    },
+    {
+      "path": "configs/paper.json",
+      "bytes": 3210,
+      "sha256": "d3574ffe1e0189f868a8ad7ac0a079e4dc58d17ed49de1e46105cc37e18341e9"
+    },
+    {
+      "path": "docs/data_contract.md",
+      "bytes": 3053,
+      "sha256": "de74c614abe4a5d07eb01a68475034746460ec2303501dbcc706fd14832c4930"
+    },
+    {
+      "path": "docs/reproduction.md",
+      "bytes": 11517,
+      "sha256": "924fb8633b6257cb2fde9e1338c5bf592fad21c48b4e2a4ad91df1dee20af8c6"
+    },
+    {
+      "path": "docs/validation.md",
+      "bytes": 2317,
+      "sha256": "228659e76b902aca73f5b16be9d1b237f545517cd9bc3dcd9bbabc16945ac225"
+    },
+    {
+      "path": "evaluation/evaluate_batch.m",
+      "bytes": 1758,
+      "sha256": "d39bc5a24316b02c35726930b107e2d069b034da60d4f05d1e4f505d265e92e2"
+    },
+    {
+      "path": "evaluation/image_metrics.m",
+      "bytes": 1933,
+      "sha256": "f77cf89e015650afd16dbe1ad0589e9f3c3e62b4384e04e51734698d708d231c"
+    },
+    {
+      "path": "evaluation/partition_metrics.m",
+      "bytes": 765,
+      "sha256": "6b0d6cfb5044852a360069bce85d386f37e6b301051f42a008746720301c0c72"
+    },
+    {
+      "path": "evaluation/perceptual.py",
+      "bytes": 821,
+      "sha256": "d3f4ca514ab006ff4e1e66da87f0d3cd94967177789caf2c8f97929daca4b960"
+    },
+    {
+      "path": "evaluation/region_metrics.m",
+      "bytes": 3220,
+      "sha256": "b5d7e8acf3014b0dfa19596384f23ec2a3fba974afac22ac8501f193f7c205a8"
+    },
+    {
+      "path": "evaluation/runner.py",
+      "bytes": 2848,
+      "sha256": "8bcc543113dbf550d794989af4f3f8ef5b06e6ab67da172335b730fdad574350"
+    },
+    {
+      "path": "hevc_prior/codec.c",
+      "bytes": 88873,
+      "sha256": "5edfd04459610b7719d40c1d8f515cd21c52dbbe15b19cdfc2083778a9464dc2"
+    },
+    {
+      "path": "hevc_prior/codec.h",
+      "bytes": 508,
+      "sha256": "cfd37d7996454005ccb247d1a5ee8df42cd2a448c7cc3f5a05c54c603d1d7e36"
+    },
+    {
+      "path": "hevc_prior/coding_tables.h",
+      "bytes": 18753,
+      "sha256": "f0a8ae618608b79ac819f45e951c7d39b497b1e13197b48be3b0182fe4280827"
+    },
+    {
+      "path": "hevc_prior/encode.c",
+      "bytes": 4131,
+      "sha256": "97df42e41d32d89d6e4a7389c956a6a24812fd1d8c17c076af3200fefc33ea1d"
+    },
+    {
+      "path": "hevc_prior/runner.py",
+      "bytes": 1550,
+      "sha256": "987834b051beba529d738b45fbb5d5fc9baca67a3db92877754a00778d299181"
+    },
+    {
+      "path": "imaging/beamform_rf.m",
+      "bytes": 3353,
+      "sha256": "b6d61ab487e649ca732c0538330b7add07a78e44f29584e0e4e78d780eb69112"
+    },
+    {
+      "path": "imaging/preprocess.py",
+      "bytes": 1896,
+      "sha256": "2340c05ef87d47bdc6ef68b8353d4278aeb273b6f4ac8f14e64cc668f9eff2cd"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 35823,
+      "sha256": "230184f60bae2feaf244f10a8bac053c8ff33a183bcc365b4d8b876d2b7f4809"
+    },
+    {
+      "path": "licenses/third_party.txt",
+      "bytes": 2222,
+      "sha256": "3da1aea02b7cab1797f9cd526b8c71d1926aefb92fb56d73559c0d10f5ece874"
+    },
+    {
+      "path": "README.md",
+      "bytes": 1484,
+      "sha256": "11453566eda35dc0a40d853fb2e6e51fc00ef015cf5f7b20887f1979ec752f3d"
+    },
+    {
+      "path": "requirements-perceptual.txt",
+      "bytes": 38,
+      "sha256": "4f51cd2e3533f44557df7f49ba496cfe92f2dca811434b7a14d18c5a6fdeb016"
+    },
+    {
+      "path": "requirements.txt",
+      "bytes": 82,
+      "sha256": "09bfe5c813238ee692844ed966e8f04922ae18e577479a91d0dc1e3d38fa7d55"
+    },
+    {
+      "path": "run.py",
+      "bytes": 4199,
+      "sha256": "6bba1ec67f534589ef4b7843403ea0acb80226bcf7cffed29697a910ad16dd24"
+    },
+    {
+      "path": "thesis.pdf",
+      "bytes": 4690135,
+      "sha256": "0565df6f86c7e9f5736302d3dd148f3c310130f7eeb2cfaedc1ac4be793699fa"
+    },
+    {
+      "path": "tools/smoke_test.py",
+      "bytes": 4643,
+      "sha256": "d23686728690e21e34b6a613d8620e972ad0707ec543e521ea26c8723d966bf3"
+    },
+    {
+      "path": "tools/verify_archive.py",
+      "bytes": 3592,
+      "sha256": "37d632ee495924fead6d846892c84dd8f54c31fcb03dbc0cef614e8655a685a2"
+    },
+    {
+      "path": "usr_mamba/dataset.py",
+      "bytes": 4370,
+      "sha256": "d3634f0fea084bd0d42d78969ebac7df576aba9e697cb3a86870ebf8f52f2ba9"
+    },
+    {
+      "path": "usr_mamba/inference.py",
+      "bytes": 1266,
+      "sha256": "6c029e8bb57904ad7175f9ebfc412a43d49d7e4a640702957b8f93964f613855"
+    },
+    {
+      "path": "usr_mamba/network.py",
+      "bytes": 7759,
+      "sha256": "9a02726c5d5c4ae87dcbd888bcb35c80106a93dda5894ff47493cb3ae00f3524"
+    },
+    {
+      "path": "usr_mamba/training.py",
+      "bytes": 7503,
+      "sha256": "acdd44df4eb11197f957effb3cbe5d71cc89a79d1136bdd1e4e9dbb59ee4dc02"
+    }
+  ]
+}
