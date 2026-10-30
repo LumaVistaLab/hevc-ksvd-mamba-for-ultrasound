@@ -71,13 +71,13 @@ python -B run.py --config $Config prepare --input work/raw_images --output work/
 python -B run.py --config $Config prior --input work/prepared/pgm --output work/priors --encoder $Encoder
 ```
 
-使用 PLANAR/DC 帧内预测、梯度敏感率失真代价、结构失真和梯度相关清零阈值。`hevc` 配置包含质量索引、失真/码率权重、梯度门限、权重增益及量化门限。质量索引 0–4 对应 QP 4、10、16、22、28，默认索引为 0。
+使用 PLANAR/DC 帧内预测、梯度敏感率失真代价、结构失真和梯度相关清零阈值。配置文件的 `hevc` 节包含质量索引、失真/码率权重、梯度门限、权重增益及量化门限。质量索引 0–4 对应 QP 4、10、16、22、28，默认索引为 0。
 
 每个样本输出 `sample_000001.hevc`、`sample_000001_tu.csv`、`sample_000001_pu.csv`，相对目录与图像一致。CSV 为 `[block_size,x,y]`，坐标为左上角起算的 0-based 像素。数值数组不包含可执行代码。位流语法、变换和熵编码表属于编码器常量；研究用搜索权重通过配置传入。
 
 ## 5. Block K-SVD
 
-独立去噪采用六种尺寸，网络前级采用三种尺寸：
+独立去噪采用六种尺寸，网络前级采用三种尺寸。配置名用于选择块尺寸，输出目录由命令行单独指定：
 
 ```powershell
 python -B run.py --config $Config denoise --images work/prepared/images --priors work/priors --output work/denoising --profile denoising --matlab $Matlab
@@ -92,7 +92,7 @@ python -B run.py --config $Config denoise --images work/prepared/images --priors
 
 尺度图经过 TU 中心去重、Delaunay 插值、凸包外最近邻补全、PU 灰度放大、平滑和最近尺度选择。不同尺度分别学习字典、进行相关选原子和残差更新，再融合重建。自适应分块使用高斯权重，固定分块使用等权重；固定尺度共享同一张图像的训练噪声。
 
-参数均位于 `block_ksvd`：512 字典原子、稀疏率 0.1、最多 10 轮、残差门限 46225、收敛门限 0.0009；脉冲噪声密度 0.003、膨胀核 3、高斯标准差 0.001；尺度放大 0.5、指数 6、平滑半径 12、高斯融合比例 0.5。保留逐次相关选择的稀疏编码规则，不额外加入联合最小二乘重估。
+参数均位于配置文件的 `block_ksvd` 节：512 字典原子、稀疏率 0.1、最多 10 轮、残差门限 46225、收敛门限 0.0009；脉冲噪声密度 0.003、膨胀核 3、高斯标准差 0.001；尺度放大 0.5、指数 6、平滑半径 12、高斯融合比例 0.5。保留逐次相关选择的稀疏编码规则，不额外加入联合最小二乘重估。
 
 输出图像位于 `images/`，连续和离散尺度图位于 `scale_maps/`，每幅图耗时写入 `timing.csv`。固定块对照位于 `images/fixed_04/` 等目录。输入文件树可只包含待测试的低线数图像，无需对未使用图像进行处理。
 
@@ -104,11 +104,11 @@ python -B run.py --config $Config train --manifest work/pairs.csv --data-root wo
 
 训练使用原始 32 线输入与对应原始 128 线参考。四次成对裁切只作用于左右和底部 0–32 像素，顶部保持不变，Lanczos 恢复原尺寸，再通过确定性水平翻转加倍。380 对有效来源对应每轮 3040 个样本。验证不裁切、不翻转、不参与梯度，并使用评价模式。
 
-`usr_mamba` 定义通道、卷积核、瓶颈深度、SSM 位置与状态参数。默认编码通道 64/128/256，九个瓶颈块中的第 1、5、9 个为双域 SSM，状态维数 16、局部卷积 4、扩展倍数 2。空间分支和中心化傅里叶实/虚分支分别扫描、建模、还原，再融合并做残差卷积精炼。
+配置文件的 `usr_mamba` 节定义通道、卷积核、瓶颈深度、SSM 位置与状态参数。默认编码通道 64/128/256，九个瓶颈块中的第 1、5、9 个为双域 SSM，状态维数 16、局部卷积 4、扩展倍数 2。空间分支和中心化傅里叶实/虚分支分别扫描、建模、还原，再融合并做残差卷积精炼。
 
 `scan_order` 明确指定二维序列排列：`outside_in` 为从边界向中心逐层绕行，`inside_out` 为其逆序，`raster` 为行优先。参数预设使用 `outside_in`；不同排列的权重不能视作等价。网络在相同像素网格上学习波束线数间的增强映射，不把图像宽高直接扩大四倍。
 
-`training` 包含批量、数据线程、Adam、损失权重、回放池、训练轮数和保存周期。默认批量 1、学习率 0.0002、Adam `(0.5,0.999)`、30 轮恒定和 30 轮线性衰减、L1 权重 10、对抗权重 1、回放容量 50。每次运行保存实际参数及验证损失，权重中不保存数据路径。
+配置文件的 `training` 节包含批量、数据线程、Adam、损失权重、回放池、训练轮数和保存周期。默认批量 1、学习率 0.0002、Adam `(0.5,0.999)`、30 轮恒定和 30 轮线性衰减、L1 权重 10、对抗权重 1、回放容量 50。每次运行保存实际参数及验证损失，权重中不保存数据路径。
 
 | `--variant` | 结构 |
 | --- | --- |
@@ -136,7 +136,7 @@ python -B run.py --config $Config infer --input work/cascade/images/low --output
 python -B run.py --config $Config evaluate --manifest work/evaluation.csv --data-root work --output work/metrics --matlab $Matlab --device $Device
 ```
 
-全图统计包括 CNR（均值/样本标准差）、ENL、Sobel 梯度相关 EPI、多尺度 LoG 相位响应近似的 FSIM。FSIM 的这个实现口径应与通用相位一致性实现区分。尺度图 CNR 使用连续图：目标 `[0,4)`、背景 `(8,12]`、噪声 `[0,12]`。FWHM 采用亮像素重心漂移、区间扩张和半高交点插值；TU 统计按中心像素归类。阈值、LoG 尺度、漂移和扩张比例在 `evaluation` 中配置。
+全图统计包括 CNR（均值/样本标准差）、ENL、Sobel 梯度相关 EPI、多尺度 LoG 相位响应近似的 FSIM。FSIM 的这个实现口径应与通用相位一致性实现区分。尺度图 CNR 使用连续图：目标 `[0,4)`、背景 `(8,12]`、噪声 `[0,12]`。FWHM 采用亮像素重心漂移、区间扩张和半高交点插值；TU 统计按中心像素归类。阈值、LoG 尺度、漂移和扩张比例由配置文件的 `evaluation` 节指定。
 
 LPIPS 需额外安装特征评价依赖，并准备公开特征权重：
 

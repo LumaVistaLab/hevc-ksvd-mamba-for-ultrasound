@@ -4,9 +4,9 @@
 
 英文题目：**An Ultrasound Image Enhancement Method Based on Adaptive Compressed Sensing and State Space Model**
 
-本项目实现[最终论文](thesis.pdf)提出的超声图像增强方法，技术路线为 **结构先验提取 → 自适应压缩感知去噪 → 状态空间超分辨率增强**。首先从高效视频编码（High Efficiency Video Coding，HEVC）块划分中提取结构先验，再通过结构先验引导的自适应分块 K-SVD 去噪方法（Block K-SVD）抑制噪声，最后以 USR-Mamba 网络对低波束线数 B 模式图像进行超分辨率重建。项目同时提供 RF 成像、图像预处理、网络训练和定量评价入口。
+本项目实现[最终论文](thesis.pdf)提出的超声图像增强方法，技术路线为 **结构先验提取 → 自适应压缩感知去噪 → 状态空间超分辨率增强**。首先从高效视频编码 (High Efficiency Video Coding, HEVC) 块划分中提取结构先验，再通过结构先验引导的自适应分块 K-SVD 去噪方法 (Block K-SVD) 抑制噪声，最后以 USR-Mamba 网络对低波束线数 B 模式图像进行超分辨率重建。项目同时提供 RF 成像、图像预处理、网络训练和定量评价入口。
 
-论文主路径为 **32 线图像 → HEVC 结构先验 → 三尺度 Block K-SVD 去噪 → USR-Mamba 超分辨率重建 → 与原生 128 线参考图像比较**。网络训练使用预处理后的原始 32 线／128 线配对图像；前级去噪接入推理路径。32／128 表示波束线数；此处超分辨率指学习两种成像条件之间的映射，网络输入输出保持相同像素尺寸。
+论文主路径为 **32 线图像 → HEVC 结构先验 → 三尺度 Block K-SVD 去噪 → USR-Mamba 超分辨率重建 → 与原生 128 线参考图像比较**。网络训练使用预处理后的原始 32 线 / 128 线配对图像；前级去噪接入推理路径。32/128 表示波束线数；此处超分辨率指学习两种成像条件之间的映射，网络输入输出保持相同像素尺寸。
 
 ## 完整流程图
 
@@ -16,7 +16,7 @@
 flowchart TD
     %% 阶段标题放在普通节点中，避免跨子图连线穿过分组标题与边界。
     RF["RF 通道数据<br/>与采集参数"] --> BF["<b>1. RF 成像（可选）</b><br/>beamform<br/>延迟求和、包络与扫描转换"]
-    BF --> BM["32 线／128 线 B 模式图像"]
+    BF --> BM["32 线 / 128 线 B 模式图像"]
     Existing["已有 B 模式图像"] --> BM
     BM --> Prep["<b>1. 图像预处理</b><br/>prepare<br/>灰度校验、裁剪与缩放"]
     Prep --> Low["原始 32 线 TIFF"]
@@ -25,25 +25,25 @@ flowchart TD
 
     PGM --> HEVC["<b>2. HEVC 结构先验提取</b><br/>prior<br/>对待处理低波束线数图像编码"]
     HEVC --> Stream["HEVC 码流"]
-    HEVC --> Blocks["TU／PU 块划分数组"]
+    HEVC --> Blocks["TU/PU 块划分数组"]
     Blocks --> Maps["<b>3. 像素级块大小图</b><br/>TU 插值与 PU 灰度调节<br/>平滑滤波与离散聚类"]
     Low --> Maps
-    Maps --> KSVD["<b>3. 自适应压缩感知去噪</b><br/>denoise - Block K-SVD<br/>字典学习、稀疏编码与加权融合"]
+    Maps --> KSVD["<b>3. 自适应压缩感知去噪</b><br/>denoise：Block K-SVD<br/>字典学习、稀疏编码与加权融合"]
     Low --> KSVD
-    KSVD --> Denoised["去噪 TIFF<br/>连续／离散尺度图与耗时"]
+    KSVD --> Denoised["去噪 TIFF<br/>连续/离散尺度图与耗时"]
 
-    Low -->|train / val| Pairs["pairs.csv<br/>按来源划分的原始配对图像"]
-    High -->|train / val| Pairs
+    Low -->|train/val| Pairs["pairs.csv<br/>按来源划分的原始配对图像"]
+    High -->|train/val| Pairs
     Pairs --> Train["<b>4. USR-Mamba 训练</b><br/>train<br/>训练集增强、对抗训练与验证"]
     Train --> Weights["USR-Mamba 权重<br/>参数与损失记录"]
-    Denoised -->|cascade 测试图像| Infer["<b>5. 状态空间超分辨率增强</b><br/>infer - USR-Mamba<br/>加载权重并重建 32 线图像"]
+    Denoised -->|cascade 配置下的测试图像| Infer["<b>5. 状态空间超分辨率增强</b><br/>infer：USR-Mamba<br/>加载权重并重建 32 线图像"]
     Weights --> Infer
     Infer --> Enhanced["增强 TIFF<br/>保持输入尺寸与相对目录"]
 
     Low -.-> Fixed["<b>3. 固定块对照</b><br/>fixed<br/>各固定尺度独立重建"]
     Fixed -.-> Eval["<b>6. 定量评价</b><br/>evaluate<br/>依据 evaluation.csv 计算指标"]
     Low -.->|原始图像对照| Eval
-    Denoised -.->|去噪对照／连续尺度图| Eval
+    Denoised -.->|去噪对照/连续尺度图| Eval
     Blocks -.->|TU 数组| Eval
     Annotations["ROI 与二值掩码（可选）"] -.-> Eval
     High -->|测试集参考| Eval
@@ -64,16 +64,16 @@ flowchart TD
     class Annotations,Eval,Reports metrics;
 ```
 
-Block K-SVD 提供两组配置：`cascade` 使用 4、8、12 三种块尺寸，作为 USR-Mamba 前级；`denoising` 使用 4、8、12、16、20、24 六种块尺寸，用于独立去噪实验。完整图中的 `denoise` 按所选配置分别运行，`fixed` 为各固定块尺寸生成独立对照结果。
+Block K-SVD 提供两组配置：`cascade` 使用 4、8、12 三种块尺寸，作为 USR-Mamba 前级；`denoising` 使用 4、8、12、16、20、24 六种块尺寸，用于独立去噪实验。配置名用于选择块尺寸，输出目录由命令行单独指定。完整图中的 `denoise` 命令按所选配置分别运行，`fixed` 命令为各固定块尺寸生成独立对照结果。
 
 ## 阶段与代码入口
 
 | 阶段 | 目录 | 输入与输出 |
 | --- | --- | --- |
-| 1. 成像与预处理 | `imaging/` | `beamform`（可选）、`prepare`：RF 或 B 模式图像 → 对齐的灰度 TIFF／PGM |
-| 2. 结构先验提取 | `hevc_prior/` | `prior`：PGM → HEVC 码流、TU／PU 数值数组 |
-| 3. 自适应压缩感知去噪 | `block_ksvd/` | `denoise`／`fixed`：图像及先验 → 去噪图像、尺度图与耗时 |
-| 4. 网络训练 | `usr_mamba/` | `train`：原始低／高波束线数配对图像及清单 → 权重与训练／验证记录 |
+| 1. 成像与预处理 | `imaging/` | `beamform`（可选）、`prepare`：RF 或 B 模式图像 → 对齐的灰度 TIFF/PGM |
+| 2. 结构先验提取 | `hevc_prior/` | `prior`：PGM → HEVC 码流、TU/PU 数值数组 |
+| 3. 自适应压缩感知去噪 | `block_ksvd/` | `denoise` / `fixed`：图像及先验 → 去噪图像、尺度图与耗时 |
+| 4. 网络训练 | `usr_mamba/` | `train`：原始低/高波束线数配对图像及清单 → 权重与训练/验证记录 |
 | 5. 状态空间超分辨率增强 | `usr_mamba/` | `infer`：去噪低波束线数图像及权重 → 超分辨率重建图像 |
 | 6. 指标计算 | `evaluation/` | `evaluate`：配准图像、尺度图及标注 → 单图与分组指标 |
 
@@ -120,20 +120,20 @@ hevc-ksvd-mamba-for-ultrasound/
 
 | 公式 | 内容 | README 位置 |
 | --- | --- | --- |
-| （2-1）–（2-5） | 量化选择、率失真成本、平方误差和及基础权重 | [HEVC 公式](#paper-hevc-equations) |
-| （2-6）–（2-12） | 结构失真、双向梯度、动态权重与 TU 梯度能量 | [HEVC 公式](#paper-hevc-equations) |
-| （2-13）–（2-15） | 系数群基础与自适应清零阈值 | [HEVC 公式](#paper-hevc-equations) |
-| （3-1）–（3-7） | 稀疏表示、选原子、残差、SVD 更新与重叠融合 | [K-SVD 公式](#paper-ksvd-equations) |
-| （3-8）–（3-12） | TU 插值、PU 灰度放大、尺度归一化、多字典与高斯窗 | [自适应尺度公式](#paper-scale-equations) |
-| （4-1）–（4-6） | 编码、瓶颈、双域分支、解码及扫描状态更新 | [USR-Mamba 公式](#paper-mamba-equations) |
-| （3-13）–（3-18） | CNR、ENL、EPI、FSIM、FWHM 与尺度区域加权评价 | [评价公式](#paper-metric-equations) |
+| (2-1)–(2-5) | 量化选择、率失真成本、平方误差和及基础权重 | [HEVC 公式](#paper-hevc-equations) |
+| (2-6)–(2-12) | 结构失真、双向梯度、动态权重与 TU 梯度能量 | [HEVC 公式](#paper-hevc-equations) |
+| (2-13)–(2-15) | 系数群基础与自适应清零阈值 | [HEVC 公式](#paper-hevc-equations) |
+| (3-1)–(3-7) | 稀疏表示、选原子、残差、SVD 更新与重叠融合 | [K-SVD 公式](#paper-ksvd-equations) |
+| (3-8)–(3-12) | TU 插值、PU 灰度放大、尺度归一化、多字典与高斯窗 | [自适应尺度公式](#paper-scale-equations) |
+| (4-1)–(4-6) | 编码、瓶颈、双域分支、解码及扫描状态更新 | [USR-Mamba 公式](#paper-mamba-equations) |
+| (3-13)–(3-18) | CNR、ENL、EPI、FSIM、FWHM 与尺度区域加权评价 | [评价公式](#paper-metric-equations) |
 | 实现补充 | 输入归一化、训练损失、学习率、分区 CNR 等 | [训练公式](#implementation-training-equations)、[评价公式](#paper-metric-equations) |
 
 ## 分步处理流程
 
 ### 1. RF 成像与图像预处理
 
-输入可为包含通道信号及物理采集参数的 MAT 文件，也可为已有的单帧 8 位灰度 TIFF。RF 输入先通过 `beamform` 生成 B 模式 TIFF，已有图像直接进入 `prepare`。低／高波束线数配对必须配准并采用相同预处理，训练、验证和测试来源由数据提供者事先划分。
+输入可为包含通道信号及物理采集参数的 MAT 文件，也可为已有的单帧 8 位灰度 TIFF。RF 输入先通过 `beamform` 生成 B 模式 TIFF，已有图像直接进入 `prepare`。低/高波束线数配对必须配准并采用相同预处理，训练、验证和测试来源由数据提供者事先划分。
 
 ```mermaid
 flowchart TD
@@ -145,34 +145,34 @@ flowchart TD
     Existing["已有 B 模式 TIFF"] --> TIFF
     TIFF --> Validate["校验单帧、8 位灰度<br/>及裁剪范围"]
     Validate --> Crop["按 crop_xyxy 裁剪"]
-    Crop --> Resize["等比例双线性缩放<br/>512 × 768（宽 × 高）"]
+    Crop --> Resize["等比例双线性缩放<br/>512×768（宽×高）"]
     Resize --> Images["images/：新建灰度 TIFF"]
     Resize --> PGM["pgm/：同像素 P5 PGM"]
 ```
 
-默认裁剪窗口为 `(0,0,750,1125)`，右／下边界不包含在裁剪区域内。预处理输出保留中性文件名及相对目录，并重新写入像素，移除原 TIFF 元数据。HEVC 输入宽高须为 32 的倍数。
+默认裁剪窗口为 `(0,0,750,1125)`，右/下边界不包含在裁剪区域内。预处理输出保留中性文件名及相对目录，并重新写入像素，移除原 TIFF 元数据。HEVC 输入宽高须为 32 的倍数。
 
 对应实现：[RF 成像](imaging/beamform_rf.m)、[预处理](imaging/preprocess.py)。
 
 ### 2. 基于 HEVC 块划分的结构先验提取
 
-`prior` 对 PGM 进行帧内编码，利用图像结构决定预测单元（Prediction Unit，PU）和变换单元（Transform Unit，TU）的块划分。论文通过限制帧内预测模式、重构率失真成本并自适应调整量化清零阈值，使组织边界、亮点目标和高频纹理区域形成更细粒度划分。后续去噪读取这些结构先验数组，图像像素来自预处理 TIFF。
+`prior` 对 PGM 进行帧内编码，利用图像结构决定预测单元 (Prediction Unit, PU) 和变换单元 (Transform Unit, TU) 的块划分。论文通过限制帧内预测模式、重构率失真成本并自适应调整量化清零阈值，使组织边界、亮点目标和高频纹理区域形成更细粒度划分。后续去噪读取这些结构先验数组，图像像素来自预处理 TIFF。
 
 ```mermaid
 flowchart TD
-    PGM["P5 灰度 PGM"] --> CTU["按 32 × 32 编码树单元处理"]
-    CTU --> Candidates["递归候选分块<br/>PLANAR／DC 帧内预测"]
+    PGM["P5 灰度 PGM"] --> CTU["按 32×32 编码树单元处理"]
+    CTU --> Candidates["递归候选分块<br/>PLANAR/DC 帧内预测"]
     Candidates --> Transform["预测残差变换与量化"]
     CTU --> Gradient["计算块梯度能量"]
     Gradient -.->|调整系数清零阈值| Transform
-    Transform --> Cost["结合像素／结构失真与码率<br/>评估候选"]
+    Transform --> Cost["结合像素/结构失真与码率<br/>评估候选"]
     Gradient -.->|调节失真与码率权重| Cost
     Cost --> Select["选择分块及预测模式"]
     Select --> Bitstream["熵编码并输出 .hevc 码流"]
     Select --> Arrays["导出 _tu.csv 与 _pu.csv"]
 ```
 
-质量索引 0–4 对应 QP 4、10、16、22、28，默认索引为 0。TU／PU CSV 均无表头，每行是 `[block_size,x,y]`，坐标以左上角为原点、从 0 开始；相对目录和样本名与输入一致。
+质量索引 0–4 对应 QP 4、10、16、22、28，默认索引为 0。TU/PU CSV 均无表头，每行是 `[block_size,x,y]`，坐标以左上角为原点、从 0 开始；相对目录和样本名与输入一致。
 
 <a id="paper-hevc-equations"></a>
 
@@ -265,7 +265,7 @@ G_{\mathrm{TU}}=\frac{1}{\mathrm{sz}^2}\sum_{i=1}^{\mathrm{sz}-2}\sum_{j=1}^{\ma
 
 梯度只在块内部计算，但能量按完整块面积 $`\mathrm{sz}^2`$ 归一化。高梯度区域增大失真项权重、减小比特数项权重，使细粒度结构在候选比较中更受重视。当前 C 编码器对 $`G_{\mathrm{TU}}`$ 使用整数除法，结构梯度差的系数由 `structure_weight` 控制，默认值为 1。
 
-系数群（CG）原清零阈值、基础阈值及自适应阈值分别为：
+系数群 (CG) 原清零阈值、基础阈值及自适应阈值分别为：
 
 ```math
 T_{\mathrm{CG}}=\frac{9\times2^{\mathrm{sft}}}{4}=9\times2^{\mathrm{sft}-2}
@@ -291,7 +291,7 @@ T_{\mathrm{base}},G_{\mathrm{TU}}\le2
 
 ### 3. 基于 Block K-SVD 的自适应压缩感知去噪
 
-Block K-SVD 是论文提出的结构先验引导的自适应分块 K-SVD 去噪方法。`denoise` 将图像、TU 和 PU 结合，通过 TU 中心点插值、PU 灰度调节、平滑滤波与离散聚类构建像素级块大小图（下文简称尺度图），再按各活跃尺度分别进行字典学习和稀疏重建，最后通过高斯加权融合得到去噪图像。字典训练图像由当前输入叠加合成脉冲／高斯噪声得到；最终稀疏重建使用当前输入图像的块。
+Block K-SVD 是论文提出的结构先验引导的自适应分块 K-SVD 去噪方法。`denoise` 将图像、TU 和 PU 结合，通过 TU 中心点插值、PU 灰度调节、平滑滤波与离散聚类构建像素级块大小图（下文简称尺度图），再按各活跃尺度分别进行字典学习和稀疏重建，最后通过高斯加权融合得到去噪图像。字典训练图像由当前输入叠加合成脉冲/高斯噪声得到；最终稀疏重建使用当前输入图像的块。
 
 ```mermaid
 flowchart TD
@@ -315,9 +315,9 @@ flowchart TD
     Discrete --> Encode
     Encode --> Reconstruct["字典乘系数还原图像块"]
     Reconstruct --> Fusion["重叠块高斯加权累加<br/>并归一化"]
-    Fusion --> Output["images/ 去噪图像与 timing.csv"]
-    Smooth --> Continuous["scale_maps/ 连续尺度图"]
-    Discrete --> DiscreteOutput["scale_maps/ 离散尺度图"]
+    Fusion --> Output["images/：去噪图像与 timing.csv"]
+    Smooth --> Continuous["scale_maps/：连续尺度图"]
+    Discrete --> DiscreteOutput["scale_maps/：离散尺度图"]
 ```
 
 中心不足或共线时，尺度插值回退到最近邻。默认字典为 512 个原子、稀疏率 0.1、最多迭代 10 轮。连续尺度图用于后续尺度分区评价，离散尺度图决定逐像素块尺寸。
@@ -327,13 +327,13 @@ flowchart TD
 | `cascade` | 4、8、12 | USR-Mamba 推理前级 |
 | `denoising` | 4、8、12、16、20、24 | 独立去噪与固定块对照 |
 
-`fixed` 跳过 TU／PU 尺度估计，对配置中的每种固定块尺寸分别学习、重建，并使用等权重融合；同一图像的各固定尺度共享同一份合成训练噪声。结果写入 `images/fixed_04/` 等目录。
+`fixed` 命令跳过 TU/PU 尺度估计，对配置中的每种固定块尺寸分别学习、重建，并使用等权重融合；同一图像的各固定尺度共享同一份合成训练噪声。结果写入 `images/fixed_04/` 等目录。
 
 <a id="paper-ksvd-equations"></a>
 
 #### 论文公式：稀疏表示与 K-SVD 更新
 
-将 $`m`$ 个图像块展开为列向量，组成 $`X=[x_1,x_2,\cdots,x_m]\in\mathbb{R}^{n\times m}`$；$`D\in\mathbb{R}^{n\times k}`$ 为字典，$`A=[a_1,a_2,\cdots,a_m]\in\mathbb{R}^{k\times m}`$ 为稀疏系数。这里 $`n`$ 为块向量维数，$`k`$ 为字典原子数；论文在式（3-10）中再次以 $`n`$ 表示尺度层数。字典学习目标为：
+将 $`m`$ 个图像块展开为列向量，组成 $`X=[x_1,x_2,\cdots,x_m]\in\mathbb{R}^{n\times m}`$；$`D\in\mathbb{R}^{n\times k}`$ 为字典，$`A=[a_1,a_2,\cdots,a_m]\in\mathbb{R}^{k\times m}`$ 为稀疏系数。这里 $`n`$ 为块向量维数，$`k`$ 为字典原子数；论文在式 (3-10) 中再次以 $`n`$ 表示尺度层数。字典学习目标为：
 
 ```math
 \underset{D,A}{\min}\|X-DA\|_F^2\quad\mathrm{s.t.}\quad\left\{\begin{gathered}
@@ -355,7 +355,7 @@ r_\ell=r_{\ell-1}-a_{I_\ell}d_{I_\ell}
 \qquad\text{(3-3)}
 ```
 
-其中 $`r_0=x_i`$。 **实现补充：** 当前 `sparse_encode.m` 在尚未选取的原子中最大化相关性的 **绝对值**，并令 $`a_{I_\ell}=d_{I_\ell}^{\mathrm{T}}r_{\ell-1}`$，再按式（3-3）更新；不进行已选原子的联合最小二乘重估。它采用论文所述的逐次相关选择与残差更新规则，应与严格的正交匹配追踪实现区分。停止条件为已选 $`L`$ 个原子或 $`\|r_\ell\|_2\le\varepsilon`$；默认 $`k=512`$、$`L=\mathrm{round}(0.1k)=51`$、$`\varepsilon=46225`$，数值按当前输入量纲直接比较。
+其中 $`r_0=x_i`$。 **实现补充：** 当前 `sparse_encode.m` 在尚未选取的原子中最大化相关性的 **绝对值**，并令 $`a_{I_\ell}=d_{I_\ell}^{\mathrm{T}}r_{\ell-1}`$，再按式 (3-3) 更新；不进行已选原子的联合最小二乘重估。它采用论文所述的逐次相关选择与残差更新规则，应与严格的正交匹配追踪实现区分。停止条件为已选 $`L`$ 个原子或 $`\|r_\ell\|_2\le\varepsilon`$；默认 $`k=512`$、$`L=\mathrm{round}(0.1k)=51`$、$`\varepsilon=46225`$，数值按当前输入量纲直接比较。
 
 对于第 $`t`$ 个字典原子，取激活样本集合 $`\mathcal{I}_t=\{i:A(t,i)\ne0\}`$，先补回该原子的贡献，构造局部残差：
 
@@ -407,7 +407,7 @@ s'(p)=s(p)\left[1+\alpha\left(1-\frac{\bar{g}_{\mathrm{PU}}(p)}{g_{\mathrm{max}}
 \qquad\text{(3-9)}
 ```
 
-默认 $`\alpha=0.5`$、$`\gamma=6`$，32 对应 `structure_limit`。暗区的放大幅度较大；代码以 $`\max\{g_{\mathrm{max}},\mathrm{eps}\}`$ 防止全黑图除零。随后采用半径 12、窗口 $`25\times25`$ 的均值滤波。为保留论文符号，式（3-10）中的 $`s'`$ 指经过该平滑步骤后的尺度图。
+默认 $`\alpha=0.5`$、$`\gamma=6`$，32 对应 `structure_limit`。暗区的放大幅度较大；代码以 $`\max\{g_{\mathrm{max}},\mathrm{eps}\}`$ 防止全黑图除零。随后采用半径 12、窗口 $`25\times25`$ 的均值滤波。为保留论文符号，式 (3-10) 中的 $`s'`$ 指经过该平滑步骤后的尺度图。
 
 论文将连续尺度归一化到 $`[4-b,4n]`$，这里 $`b`$ 为下界调节参数；论文后文再次以 $`b`$ 表示块边长：
 
@@ -434,7 +434,7 @@ s_{\mathrm{disc}}(p)=\underset{b\in\mathcal{B}}{\mathrm{argmin}}\left|\tilde{s}(
 \qquad\text{(3-11)}
 ```
 
-每个块的向量维数为 $`b^2`$。训练样本来自叠加合成噪声的图像，最终编码块来自当前输入图像。重建后的块按式（3-7）融合，自适应分块采用高斯窗：
+每个块的向量维数为 $`b^2`$。训练样本来自叠加合成噪声的图像，最终编码块来自当前输入图像。重建后的块按式 (3-7) 融合，自适应分块采用高斯窗：
 
 ```math
 w_b(i,j)=\mathrm{e}^{-\frac{(i-c)^2+(j-c)^2}{2(\eta b)^2}}
@@ -451,9 +451,9 @@ w_b(i,j)=\mathrm{e}^{-\frac{(i-c)^2+(j-c)^2}{2(\eta b)^2}}
 
 ```mermaid
 flowchart TD
-    Manifest["pairs.csv<br/>原始低／高波束线数 TIFF"] --> Check["核验来源、路径、尺寸<br/>及集合划分"]
+    Manifest["pairs.csv<br/>原始低/高波束线数 TIFF"] --> Check["核验来源、路径、尺寸<br/>及集合划分"]
     Check --> Train["train：四次成对裁剪<br/>Lanczos 恢复尺寸<br/>水平翻转"]
-    Train --> Normalize["灰度映射到 -1 至 1"]
+    Train --> Normalize["灰度映射到 −1 至 1"]
     Normalize --> Generator["USR-Mamba 生成增强图像"]
     Generator --> L1["与对应 128 线参考计算 L1 损失"]
     Normalize --> Discriminator["条件 Patch 判别器<br/>真实配对与生成配对<br/>生成配对回放池"]
@@ -472,7 +472,7 @@ flowchart TD
 
 默认批量为 1、学习率为 0.0002、Adam 参数为 `(0.5,0.999)`；先恒定学习率训练 30 轮，再线性衰减训练 30 轮。生成器损失为 `10 × L1 + 1 × 最小二乘对抗损失`。每个训练来源得到四组确定的成对裁剪，只裁左右和底部 0–32 像素、顶部不变，再通过水平翻转形成八个样本；验证集保持独立。权重默认每 5 轮及最终轮保存，记录模型结构与变体。
 
-`--variant` 支持完整模型 `full`，以及论文中的四种结构消融：纯卷积瓶颈（`conv_bottleneck`）、无频域分支（`no_fourier`）、无卷积精炼（`no_refinement`，移除 SSM 后的残差卷积精炼）和栅格扫描（`raster_scan`，采用行优先顺序）。
+`--variant` 支持完整模型 `full`，以及论文中的四种结构消融：纯卷积瓶颈 (`conv_bottleneck`)、无频域分支 (`no_fourier`)、无卷积精炼（`no_refinement`，移除 SSM 后的残差卷积精炼）和栅格扫描（`raster_scan`，采用行优先顺序）。
 
 <a id="implementation-training-equations"></a>
 
@@ -505,25 +505,25 @@ r(e)=r_0\left(1-\frac{\max\{0,e-E_c\}}{E_d+1}\right)
 
 ### 5. 基于 USR-Mamba 的状态空间超分辨率增强
 
-USR-Mamba 是论文构建的医学超声 B 模式图像超分辨率网络，在编码器—高分辨率瓶颈—解码器结构中结合空间—频率双域状态空间建模、残差卷积和角向均匀扫描。`infer` 加载指定权重及其中记录的模型结构，对 `cascade` 输出的去噪 32 线图像进行超分辨率重建。以下是默认完整模型的数据流，`H × W` 表示输入的高和宽；扫描顺序的实现说明见式（4-6）之后。
+USR-Mamba 是论文构建的医学超声 B 模式图像超分辨率网络，在编码器—高分辨率瓶颈—解码器结构中结合空间—频率双域状态空间建模、残差卷积和角向均匀扫描。`infer` 加载指定权重及其中记录的模型结构，对使用 `cascade` 配置去噪后的 32 线图像进行超分辨率重建。以下是默认完整模型的数据流，`H×W` 表示输入的高和宽；扫描顺序的实现说明见式 (4-6) 之后。
 
 ```mermaid
 flowchart TD
-    Input["去噪 32 线 TIFF 与指定权重"] --> Normalize["灰度映射到 -1 至 1"]
-    Normalize --> E1["7 × 7 卷积<br/>64 通道，H × W"]
-    E1 --> E2["步长 2 卷积<br/>128 通道，H/2 × W/2"]
-    E2 --> E3["步长 2 卷积<br/>256 通道，H/4 × W/4"]
+    Input["去噪 32 线 TIFF 与指定权重"] --> Normalize["灰度映射到 −1 至 1"]
+    Normalize --> E1["7×7 卷积<br/>64 通道，H×W"]
+    E1 --> E2["步长 2 卷积<br/>128 通道，H/2×W/2"]
+    E2 --> E3["步长 2 卷积<br/>256 通道，H/4×W/4"]
     E3 --> Bottleneck["9 个瓶颈块<br/>第 1、5、9 块为双域 SSM<br/>其余为残差卷积"]
-    Bottleneck --> D1["拼接对应编码特征并转置卷积<br/>128 通道，H/2 × W/2"]
+    Bottleneck --> D1["拼接对应编码特征并转置卷积<br/>128 通道，H/2×W/2"]
     E3 -->|跳跃连接| D1
-    D1 --> D2["拼接对应编码特征并转置卷积<br/>64 通道，H × W"]
+    D1 --> D2["拼接对应编码特征并转置卷积<br/>64 通道，H×W"]
     E2 -->|跳跃连接| D2
-    D2 --> Head["拼接浅层特征<br/>7 × 7 卷积与 Tanh"]
+    D2 --> Head["拼接浅层特征<br/>7×7 卷积与 Tanh"]
     E1 -->|跳跃连接| Head
     Head --> Save["映射回 0 至 255 并裁限<br/>保存 8 位灰度 TIFF"]
 ```
 
-双域状态空间模型（State Space Model，SSM）包含图像域与傅里叶域两条分支：图像域特征经二维扫描、LayerNorm 和 Mamba 后还原；傅里叶域特征经二维 FFT 与中心化，将实部／虚部拼接后扫描建模，再逆变换回图像域。两分支融合后，与输入特征拼接融合，并进行残差卷积精炼。默认扫描顺序为从边界向中心逐层绕行的 `outside_in`。
+双域状态空间模型 (State Space Model, SSM) 包含图像域与傅里叶域两条分支：图像域特征经二维扫描、LayerNorm 和 Mamba 后还原；傅里叶域特征经二维 FFT 与中心化，将实部/虚部拼接后扫描建模，再逆变换回图像域。两分支融合后，与输入特征拼接融合，并进行残差卷积精炼。默认扫描顺序为从边界向中心逐层绕行的 `outside_in`。
 
 推理采用评价模式并关闭梯度，输入宽高须能被默认下采样因子 4 整除。输出保留尺寸、样本名和相对目录。原始 32 线输入对照可使用相同权重另行执行 `infer`。
 
@@ -541,7 +541,7 @@ X=U(I_{\mathrm{LR}})\\
 \qquad\text{(4-1)}
 ```
 
-论文允许在预处理已得到目标尺寸时直接令 $`X=I_{\mathrm{LR}}^{\mathrm{up}}`$。本项目的 32／128 线图像已处于同一像素网格，故这里 $`U`$ 为恒等尺寸映射，灰度另按前述公式归一化。
+论文允许在预处理已得到目标尺寸时直接令 $`X=I_{\mathrm{LR}}^{\mathrm{up}}`$。本项目的 32/128 线图像已处于同一像素网格，故这里 $`U`$ 为恒等尺寸映射，灰度另按前述公式归一化。
 
 设瓶颈阶段数 $`J=9`$，双域模块位置集合 $`S=\{1,5,9\}`$，则论文的阶段更新为：
 
@@ -570,7 +570,7 @@ u_F=\mathcal{F}^{-1}\left(\mathcal{R}^{-1}\mathcal{M}_{F,j}\left(\mathcal{R}\lef
 \qquad\text{(4-3)}
 ```
 
-其中 $`\mathcal{M}_{I,j}(\cdot)`$、$`\mathcal{M}_{F,j}(\cdot)`$ 分别为图像域与傅里叶域分支，$`P_j(\cdot)`$ 为通道投影。此处的 $`\mathcal{R}(\cdot)`$ 是复数重排，与训练小节的回放池符号分别使用。代码对二维 FFT 使用 `fftshift` 中心化，逆变换前使用 `ifftshift`，并取逆变换结果实部；空间序列通道数为 $`C`$，频域实／虚序列通道数为 $`2C`$。
+其中 $`\mathcal{M}_{I,j}(\cdot)`$、$`\mathcal{M}_{F,j}(\cdot)`$ 分别为图像域与傅里叶域分支，$`P_j(\cdot)`$ 为通道投影。此处的 $`\mathcal{R}(\cdot)`$ 是复数重排，与训练小节的回放池符号分别使用。代码对二维 FFT 使用 `fftshift` 中心化，逆变换前使用 `ifftshift`，并取逆变换结果实部；空间序列通道数为 $`C`$，频域实/虚序列通道数为 $`2C`$。
 
 对任一分支输入 $`q`$，论文以通道扩展、局部卷积、门控 SSM 及通道混合描述分支计算：
 
@@ -586,7 +586,7 @@ e_{\mathrm{SSM}}=q+\mathrm{Lin}_{1/\beta}(g\odot M)\\
 \qquad\text{(4-4)}
 ```
 
-$`\mathrm{Lin}_{\beta}(\cdot)`$ 与 $`\mathrm{Lin}_{1/\beta}(\cdot)`$ 分别扩展和压缩通道，$`\mathrm{DWConv}(\cdot)`$ 为深度卷积，$`\sigma(\cdot)`$ 为激活，$`\odot`$ 为逐元素乘法，$`\mathrm{cmConv}(\cdot)`$ 为通道混合卷积，$`\mathrm{SSM}_{\theta}(\cdot)`$ 为基于角向均匀扫描的状态空间算子。图像域分支取 $`q=f_j`$，傅里叶域分支取 $`q=\mathcal{R}(\mathcal{F}(f_j))`$。 **实现对应：** 式（4-4）保留论文的模块级表达；当前每个分支具体调用 `LayerNorm` 和 `mamba_ssm.Mamba`，外部再由 `DualDomainState`、`FeatureFusion` 和 `ResidualConvolution` 完成双域融合、输入拼接融合及残差精炼，并未逐项显式搭建式中的所有独立层。
+$`\mathrm{Lin}_{\beta}(\cdot)`$ 与 $`\mathrm{Lin}_{1/\beta}(\cdot)`$ 分别扩展和压缩通道，$`\mathrm{DWConv}(\cdot)`$ 为深度卷积，$`\sigma(\cdot)`$ 为激活，$`\odot`$ 为逐元素乘法，$`\mathrm{cmConv}(\cdot)`$ 为通道混合卷积，$`\mathrm{SSM}_{\theta}(\cdot)`$ 为基于角向均匀扫描的状态空间算子。图像域分支取 $`q=f_j`$，傅里叶域分支取 $`q=\mathcal{R}(\mathcal{F}(f_j))`$。 **实现对应：** 式 (4-4) 保留论文的模块级表达；当前每个分支具体调用 `LayerNorm` 和 `mamba_ssm.Mamba`，外部再由 `DualDomainState`、`FeatureFusion` 和 `ResidualConvolution` 完成双域融合、输入拼接融合及残差精炼，并未逐项显式搭建式中的所有独立层。
 
 解码器 $`D(\cdot)`$ 融合瓶颈输出与跳连特征：
 
@@ -611,7 +611,7 @@ M[p(n),c]=z_{\mathrm{out}}[n,c]
 \qquad\text{(4-6)}
 ```
 
-$`\ell[n,c]`$ 为隐藏状态，$`\bar{A}`$ 为状态转移参数，$`\bar{B}[n]`$、$`\bar{C}[n]`$ 为输入相关参数。扫描只改变排列，不改变特征数量，也不进行插值。论文正文将角向均匀扫描描述为由中心向外的近似螺旋路径；当前配置默认 `outside_in`，实现为沿矩形边界逐层向中心绕行，`inside_out` 为其逆序。式（4-6）适用于这些排列，但两种方向不应视作同一实验设置，具体复现以保存的 `scan_order` 为准。
+$`\ell[n,c]`$ 为隐藏状态，$`\bar{A}`$ 为状态转移参数，$`\bar{B}[n]`$、$`\bar{C}[n]`$ 为输入相关参数。扫描只改变排列，不改变特征数量，也不进行插值。论文正文将角向均匀扫描描述为由中心向外的近似螺旋路径；当前配置默认 `outside_in`，实现为沿矩形边界逐层向中心绕行，`inside_out` 为其逆序。式 (4-6) 适用于这些排列，但两种方向不应视作同一实验设置，具体复现以保存的 `scan_order` 为准。
 
 对应实现：[网络结构](usr_mamba/network.py)、[推理与图像保存](usr_mamba/inference.py)。
 
@@ -636,9 +636,9 @@ flowchart TD
     Check --> Whole["全图 CNR、ENL<br/>相对参考的 EPI 与 FSIM"]
     Check --> Region["结果图像与连续尺度图<br/>分区 CNR"]
     Check --> Width["结果图像与 ROI<br/>重心校正、区间扩张<br/>半高交点插值"]
-    Width --> FWHM["横向／纵向 FWHM，单位为像素"]
+    Width --> FWHM["横向/纵向 FWHM，单位为像素"]
     Check --> Partition["TU 与二值掩码<br/>按 TU 中心归类并统计尺寸"]
-    Check --> LPIPS["可选 --lpips<br/>结果／参考灰度复制为三通道<br/>计算感知距离"]
+    Check --> LPIPS["可选 --lpips<br/>结果/参考灰度复制为三通道<br/>计算感知距离"]
     Whole --> Metrics["metrics.csv：逐样本指标"]
     Region --> Metrics
     FWHM --> Metrics
@@ -647,9 +647,9 @@ flowchart TD
     Metrics --> Groups["按 group 对有效值取均值<br/>写入 group_means.csv"]
 ```
 
-全图 `global_cnr` 使用均值／样本标准差，ENL 使用均值平方／样本方差；EPI 使用 Sobel 梯度相关。FSIM 使用多尺度 LoG 相位响应近似，具体口径见[复现指南](docs/reproduction.md)。尺度分区 CNR 默认将连续尺度图的 `[0,4)` 作为目标、`(8,12]` 作为背景、`[0,12]` 作为噪声统计范围。
+全图 `global_cnr` 使用均值/样本标准差，ENL 使用均值平方/样本方差；EPI 使用 Sobel 梯度相关。FSIM 使用多尺度 LoG 相位响应近似，具体口径见[复现指南](docs/reproduction.md)。尺度分区 CNR 默认将连续尺度图的 `[0,4)` 作为目标、`(8,12]` 作为背景、`[0,12]` 作为噪声统计范围。
 
-缺少对应尺度图、ROI 或 TU／掩码时，相关指标保留为缺失值（NaN）；LPIPS 通过 `--lpips` 显式启用，需要额外特征评价依赖和公开特征权重。
+缺少对应尺度图、ROI 或 TU/掩码时，相关指标保留为缺失值 (NaN)；LPIPS 通过 `--lpips` 显式启用，需要额外特征评价依赖和公开特征权重。
 
 <a id="paper-metric-equations"></a>
 
@@ -716,7 +716,7 @@ $`*`$ 表示卷积，其他乘法、平方和最大值按像素计算，图像�
 \qquad\text{(3-18)}
 ```
 
-该式用于论文中按尺度分析局部贡献；当前 `evaluate` 入口尚未导出式（3-18）的逐尺度加权结果，`group_means.csv` 是按清单 `group` 对有效单图指标取算术均值，两者含义不同。
+该式用于论文中按尺度分析局部贡献；当前 `evaluate` 入口尚未导出式 (3-18) 的逐尺度加权结果，`group_means.csv` 是按清单 `group` 对有效单图指标取算术均值，两者含义不同。
 
 #### 实现补充：第 4 章分区 CNR、感知距离与 TU 统计
 
@@ -731,11 +731,11 @@ $`*`$ 表示卷积，其他乘法、平方和最大值按像素计算，图像�
 \end{gathered}
 ```
 
-$`\mu_\Omega`$、$`\sigma_\Omega`$ 为结果图在区域 $`\Omega`$ 内的均值与样本标准差，CSV 字段为 `cnr`。该定义与式（3-13）的 `global_cnr` 分开报告；三类区域任一为空时保留 NaN。阈值由 `cnr_target`、`cnr_background`、`cnr_noise` 配置。
+$`\mu_\Omega`$、$`\sigma_\Omega`$ 为结果图在区域 $`\Omega`$ 内的均值与样本标准差，CSV 字段为 `cnr`。该定义与式 (3-13) 的 `global_cnr` 分开报告；三类区域任一为空时保留 NaN。阈值由 `cnr_target`、`cnr_background`、`cnr_noise` 配置。
 
 LPIPS 的当前调用可写为 $`d_{\mathrm{LPIPS}}=\mathrm{LPIPS}_{\mathrm{AlexNet}}(T(I_{\mathrm{result}}),T(I_{\mathrm{reference}}))`$，其中 $`T(\cdot)`$ 将 8 位灰度复制为三通道并映射至 $`[-1,1]`$，数值越低表示感知特征越接近参考。
 
-论文还讨论了峰值信噪比（Peak Signal-to-Noise Ratio，PSNR）的局限；为便于对照，其定义为 $`\mathrm{MSE}=\frac1N\sum_p(I_{\mathrm{result}}(p)-I_{\mathrm{reference}}(p))^2`$、$`\mathrm{PSNR}=10\log_{10}\left(\frac{M^2}{\mathrm{MSE}}\right)`$，$`M`$ 为灰度满量程（8 位灰度为 255，归一化灰度为 1）。当前评价入口未导出 PSNR；它也不是论文主要的增强评价指标。
+论文还讨论了峰值信噪比 (Peak Signal-to-Noise Ratio, PSNR) 的局限；为便于对照，其定义为 $`\mathrm{MSE}=\frac1N\sum_p(I_{\mathrm{result}}(p)-I_{\mathrm{reference}}(p))^2`$、$`\mathrm{PSNR}=10\log_{10}\left(\frac{M^2}{\mathrm{MSE}}\right)`$，$`M`$ 为灰度满量程（8 位灰度为 255，归一化灰度为 1）。当前评价入口未导出 PSNR；它也不是论文主要的增强评价指标。
 
 TU 统计按块中心是否位于二值掩码内分为 ROI 与背景。设两类 TU 集合为 $`\mathcal{T}_r,\mathcal{T}_b`$，TU 边长为 $`s_t`$，则 `roi_tu_mean`、`background_tu_mean` 与 `tu_ratio` 对应：
 
@@ -747,13 +747,13 @@ TU 统计按块中心是否位于二值掩码内分为 ROI 与背景。设两类
 \end{gathered}
 ```
 
-这是按 TU 个数计算的边长均值，不按块面积加权。缺少 TU／掩码时输出 NaN；提供标注但某类为空时，代码将该类均值置 0，ROI 均值为 0 时比值置 Inf。
+这是按 TU 个数计算的边长均值，不按块面积加权。缺少 TU/掩码时输出 NaN；提供标注但某类为空时，代码将该类均值置 0，ROI 均值为 0 时比值置 Inf。
 
 对应实现：[评价入口](evaluation/runner.py)、[MATLAB 批量指标](evaluation/evaluate_batch.m)。
 
 ## 运行与复现
 
-依次使用 `beamform`（可选）、`prepare`、`prior`、`denoise` 准备图像；通过 `train` 得到权重后执行 `infer`，最后通过 `evaluate` 汇总结果。已有兼容权重时可直接进入推理；`fixed` 及各网络变体用于独立对照。输入清单、标注和数据划分需事先准备。
+依次使用 `beamform`（可选）、`prepare`、`prior`、`denoise` 准备图像；通过 `train` 得到权重后执行 `infer`，最后通过 `evaluate` 汇总结果。已有兼容权重时可直接进入推理；`fixed` 命令及各网络变体用于独立对照。输入清单、标注和数据划分需事先准备。
 
 环境安装、编码器构建和各阶段命令见[复现指南](docs/reproduction.md)，输入与清单格式见[数据契约](docs/data_contract.md)，已完成的合成验证及实测范围见[验证记录](docs/validation.md)。
 

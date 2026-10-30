@@ -14,7 +14,7 @@ Solid arrows indicate the main processing steps and data dependencies; dashed ar
 flowchart TD
     %% Keep stage titles in regular nodes so cross-stage edges do not cross subgraph titles or borders.
     RF["RF channel data<br/>and acquisition parameters"] --> BF["<b>1. RF imaging - optional</b><br/>beamform<br/>Delay-and-sum, envelope, scan conversion"]
-    BF --> BM["32-beamline / 128-beamline B-mode images"]
+    BF --> BM["32-beamline/128-beamline B-mode images"]
     Existing["Existing B-mode images"] --> BM
     BM --> Prep["<b>1. Image preprocessing</b><br/>prepare<br/>Grayscale validation, cropping, resizing"]
     Prep --> Low["Original 32-beamline TIFF"]
@@ -23,18 +23,18 @@ flowchart TD
 
     PGM --> HEVC["<b>2. HEVC structural prior extraction</b><br/>prior<br/>Encode low-beamline-count images"]
     HEVC --> Stream["HEVC bitstream"]
-    HEVC --> Blocks["TU / PU partition arrays"]
+    HEVC --> Blocks["TU/PU partition arrays"]
     Blocks --> Maps["<b>3. Pixel-wise block-size maps</b><br/>TU interpolation, PU grayscale adjustment<br/>Smoothing and discrete clustering"]
     Low --> Maps
-    Maps --> KSVD["<b>3. Adaptive compressed sensing<br/>denoising</b><br/>denoise - Block K-SVD<br/>Dictionary learning, sparse coding, weighted fusion"]
+    Maps --> KSVD["<b>3. Adaptive compressed sensing<br/>denoising</b><br/>denoise: Block K-SVD<br/>Dictionary learning, sparse coding, weighted fusion"]
     Low --> KSVD
-    KSVD --> Denoised["Denoised TIFF<br/>Continuous / discrete scale maps and timing"]
+    KSVD --> Denoised["Denoised TIFF<br/>Continuous/discrete scale maps and timing"]
 
-    Low -->|train / val| Pairs["pairs.csv<br/>Original image pairs split by source"]
-    High -->|train / val| Pairs
+    Low -->|train/val| Pairs["pairs.csv<br/>Original image pairs split by source"]
+    High -->|train/val| Pairs
     Pairs --> Train["<b>4. USR-Mamba training</b><br/>train<br/>Training augmentation, adversarial training, validation"]
     Train --> Weights["USR-Mamba weights<br/>Parameters and loss records"]
-    Denoised -->|cascade test images| Infer["<b>5. State space super-resolution<br/>enhancement</b><br/>infer - USR-Mamba<br/>Load weights and reconstruct 32-beamline images"]
+    Denoised -->|Test images from cascade profile| Infer["<b>5. State space super-resolution<br/>enhancement</b><br/>infer: USR-Mamba<br/>Load weights and reconstruct 32-beamline images"]
     Weights --> Infer
     Infer --> Enhanced["Enhanced TIFF<br/>Original dimensions and relative directories"]
 
@@ -43,7 +43,7 @@ flowchart TD
     Low -.->|Original-image baseline| Eval
     Denoised -.->|Denoising comparison / continuous scale maps| Eval
     Blocks -.->|TU arrays| Eval
-    Annotations["ROI and binary masks - optional"] -.-> Eval
+    Annotations["ROI and binary masks (optional)"] -.-> Eval
     High -->|Test-set reference| Eval
     Enhanced --> Eval
     Eval --> Reports["metrics.csv: per-image metrics<br/>group_means.csv: group means"]
@@ -62,14 +62,14 @@ flowchart TD
     class Annotations,Eval,Reports metrics;
 ```
 
-Block K-SVD provides two profiles: `cascade` uses block sizes 4, 8, and 12 before USR-Mamba; `denoising` uses six sizes, 4, 8, 12, 16, 20, and 24, for standalone denoising experiments. In the complete workflow, `denoise` runs with the selected profile, while `fixed` generates a separate comparison result for each fixed block size.
+Block K-SVD provides two profiles: `cascade` uses block sizes 4, 8, and 12 before USR-Mamba; `denoising` uses six sizes, 4, 8, 12, 16, 20, and 24, for standalone denoising experiments. Profile names select block sizes; output directories are specified separately. In the complete workflow, the `denoise` command runs with the selected profile, while the `fixed` command generates a separate comparison result for each fixed block size.
 
 ## Stages and Code Entry Points
 
 | Stage | Directory | Inputs and outputs |
 | --- | --- | --- |
-| 1. Imaging and preprocessing | `imaging/` | `beamform` (optional), `prepare`: RF or B-mode images → aligned grayscale TIFF / PGM |
-| 2. Structural prior extraction | `hevc_prior/` | `prior`: PGM → HEVC bitstreams and numerical TU / PU arrays |
+| 1. Imaging and preprocessing | `imaging/` | `beamform` (optional), `prepare`: RF or B-mode images → aligned grayscale TIFF/PGM |
+| 2. Structural prior extraction | `hevc_prior/` | `prior`: PGM → HEVC bitstreams and numerical TU/PU arrays |
 | 3. Adaptive compressed sensing denoising | `block_ksvd/` | `denoise` / `fixed`: images and priors → denoised images, scale maps, and timing |
 | 4. Network training | `usr_mamba/` | `train`: original image pairs with low/high beamline counts and manifest → weights and training/validation records |
 | 5. State space super-resolution enhancement | `usr_mamba/` | `infer`: denoised low-beamline-count images and weights → super-resolution reconstructions |
@@ -143,7 +143,7 @@ flowchart TD
     Existing["Existing B-mode TIFF"] --> TIFF
     TIFF --> Validate["Validate single-frame, 8-bit grayscale<br/>and crop bounds"]
     Validate --> Crop["Crop using crop_xyxy"]
-    Crop --> Resize["Bilinear resizing with aspect ratio preserved<br/>512 × 768 - width × height"]
+    Crop --> Resize["Bilinear resizing with aspect ratio preserved<br/>512×768 (width×height)"]
     Resize --> Images["images/: new grayscale TIFF"]
     Resize --> PGM["pgm/: P5 PGM with identical pixels"]
 ```
@@ -158,19 +158,19 @@ Implementation: [RF imaging](imaging/beamform_rf.m), [preprocessing](imaging/pre
 
 ```mermaid
 flowchart TD
-    PGM["P5 grayscale PGM"] --> CTU["Process 32 × 32 coding tree units"]
-    CTU --> Candidates["Recursive candidate partitions<br/>PLANAR / DC intra prediction"]
+    PGM["P5 grayscale PGM"] --> CTU["Process 32×32 coding tree units"]
+    CTU --> Candidates["Recursive candidate partitions<br/>PLANAR/DC intra prediction"]
     Candidates --> Transform["Transform and quantize prediction residuals"]
     CTU --> Gradient["Compute block gradient energy"]
     Gradient -.->|Adjust coefficient zeroing threshold| Transform
-    Transform --> Cost["Evaluate candidates using pixel / structural<br/>distortion and bitrate"]
+    Transform --> Cost["Evaluate candidates using pixel/structural<br/>distortion and bitrate"]
     Gradient -.->|Adjust distortion and bitrate weights| Cost
     Cost --> Select["Select partition and prediction mode"]
     Select --> Bitstream["Entropy-code and write .hevc bitstream"]
     Select --> Arrays["Export _tu.csv and _pu.csv"]
 ```
 
-Quality indices 0–4 correspond to QP values 4, 10, 16, 22, and 28; the default index is 0. TU / PU CSV files have no header. Each row is `[block_size,x,y]`, with zero-based coordinates originating at the top-left corner. Relative directories and sample names match the input.
+Quality indices 0–4 correspond to QP values 4, 10, 16, 22, and 28; the default index is 0. TU/PU CSV files have no header. Each row is `[block_size,x,y]`, with zero-based coordinates originating at the top-left corner. Relative directories and sample names match the input.
 
 <a id="paper-hevc-equations"></a>
 
@@ -325,7 +325,7 @@ Scale interpolation falls back to nearest neighbors when centers are insufficien
 | `cascade` | 4, 8, 12 | Denoising before USR-Mamba inference |
 | `denoising` | 4, 8, 12, 16, 20, 24 | Standalone denoising and fixed-block comparisons |
 
-`fixed` skips TU / PU scale estimation, learns and reconstructs each configured fixed block size separately, and fuses overlapping patches with equal weights. All fixed scales for the same image share the same synthetic training noise. Results are written to directories such as `images/fixed_04/`.
+The `fixed` command skips TU/PU scale estimation, learns and reconstructs each configured fixed block size separately, and fuses overlapping patches with equal weights. All fixed scales for the same image share the same synthetic training noise. Results are written to directories such as `images/fixed_04/`.
 
 <a id="paper-ksvd-equations"></a>
 
@@ -451,13 +451,13 @@ Implementation: [batch denoising](block_ksvd/batch_denoise.m), [scale maps](bloc
 flowchart TD
     Manifest["pairs.csv<br/>Original TIFF pairs with low/high beamline counts"] --> Check["Validate sources, paths, dimensions<br/>and dataset splits"]
     Check --> Train["train: four paired crops<br/>Restore size with Lanczos<br/>Horizontal flips"]
-    Train --> Normalize["Map grayscale to -1 through 1"]
+    Train --> Normalize["Map grayscale to −1 through 1"]
     Normalize --> Generator["USR-Mamba generates enhanced images"]
     Generator --> L1["L1 loss against paired 128-beamline reference"]
     Normalize --> Discriminator["Conditional Patch discriminator<br/>Real and generated pairs<br/>Generated-pair replay pool"]
     Generator --> Discriminator
     Discriminator --> Adversarial["Least-squares adversarial loss"]
-    L1 --> Update["Weighted losses and Adam<br/>Alternate generator / discriminator updates"]
+    L1 --> Update["Weighted losses and Adam<br/>Alternate generator/discriminator updates"]
     Adversarial --> Update
     Check --> Validation["val: full image pairs<br/>No crops or flips, grayscale normalization"]
     Update --> Validate["Evaluation mode after each epoch<br/>Validation L1 without gradients"]
@@ -503,20 +503,20 @@ Implementation: [paired data and splits](usr_mamba/dataset.py), [training and va
 
 ### 5. State Space Super-Resolution Enhancement with USR-Mamba
 
-USR-Mamba is the thesis's super-resolution network for medical ultrasound B-mode images. It combines spatial-frequency dual-domain state space modeling, residual convolution, and angular-uniform scanning in an encoder–high-resolution bottleneck–decoder architecture. `infer` loads the specified weights and their recorded model architecture to reconstruct the denoised 32-beamline images produced by `cascade`. The following diagram shows the default full model; `H × W` denotes input height and width. The scan-order implementation is detailed after Eq. (4-6).
+USR-Mamba is the thesis's super-resolution network for medical ultrasound B-mode images. It combines spatial-frequency dual-domain state space modeling, residual convolution, and angular-uniform scanning in an encoder–high-resolution bottleneck–decoder architecture. `infer` loads the specified weights and their recorded model architecture to reconstruct the 32-beamline images denoised with the `cascade` profile. The following diagram shows the default full model; `H×W` denotes input height and width. The scan-order implementation is detailed after Eq. (4-6).
 
 ```mermaid
 flowchart TD
-    Input["Denoised 32-beamline TIFF and selected weights"] --> Normalize["Map grayscale to -1 through 1"]
-    Normalize --> E1["7 × 7 convolution<br/>64 channels, H × W"]
-    E1 --> E2["Stride-2 convolution<br/>128 channels, H/2 × W/2"]
-    E2 --> E3["Stride-2 convolution<br/>256 channels, H/4 × W/4"]
+    Input["Denoised 32-beamline TIFF and selected weights"] --> Normalize["Map grayscale to −1 through 1"]
+    Normalize --> E1["7×7 convolution<br/>64 channels, H×W"]
+    E1 --> E2["Stride-2 convolution<br/>128 channels, H/2×W/2"]
+    E2 --> E3["Stride-2 convolution<br/>256 channels, H/4×W/4"]
     E3 --> Bottleneck["9 bottleneck blocks<br/>Dual-domain SSM at blocks 1, 5, 9<br/>Residual convolutions elsewhere"]
-    Bottleneck --> D1["Concatenate matching encoder features<br/>Transposed convolution: 128 channels, H/2 × W/2"]
+    Bottleneck --> D1["Concatenate matching encoder features<br/>Transposed convolution: 128 channels, H/2×W/2"]
     E3 -->|Skip connection| D1
-    D1 --> D2["Concatenate matching encoder features<br/>Transposed convolution: 64 channels, H × W"]
+    D1 --> D2["Concatenate matching encoder features<br/>Transposed convolution: 64 channels, H×W"]
     E2 -->|Skip connection| D2
-    D2 --> Head["Concatenate shallow features<br/>7 × 7 convolution and Tanh"]
+    D2 --> Head["Concatenate shallow features<br/>7×7 convolution and Tanh"]
     E1 -->|Skip connection| Head
     Head --> Save["Map back to 0 through 255 and clip<br/>Save 8-bit grayscale TIFF"]
 ```
@@ -634,9 +634,9 @@ flowchart TD
     Check --> Whole["Whole-image CNR and ENL<br/>EPI and FSIM against reference"]
     Check --> Region["Result image and continuous scale map<br/>Regional CNR"]
     Check --> Width["Result image and ROI<br/>Centroid correction, interval expansion<br/>Half-maximum intersection interpolation"]
-    Width --> FWHM["Horizontal / vertical FWHM in pixels"]
+    Width --> FWHM["Horizontal/vertical FWHM in pixels"]
     Check --> Partition["TU and binary mask<br/>Classify by TU center and summarize sizes"]
-    Check --> LPIPS["Optional --lpips<br/>Replicate result / reference grayscale into 3 channels<br/>Compute perceptual distance"]
+    Check --> LPIPS["Optional --lpips<br/>Replicate result/reference grayscale into 3 channels<br/>Compute perceptual distance"]
     Whole --> Metrics["metrics.csv: per-sample metrics"]
     Region --> Metrics
     FWHM --> Metrics
@@ -647,7 +647,7 @@ flowchart TD
 
 Whole-image `global_cnr` uses mean / sample standard deviation, and ENL uses squared mean / sample variance. EPI uses Sobel-gradient correlation. FSIM approximates phase responses with multiscale LoG; see the [reproduction guide](docs/reproduction.md) for its exact definition. By default, regional CNR treats continuous scales in `[0,4)` as the target, `(8,12]` as the background, and `[0,12]` as the noise-statistics range.
 
-Metrics requiring a missing scale map, ROI, or TU / mask remain missing (NaN). LPIPS is explicitly enabled with `--lpips` and requires the additional perceptual-evaluation dependencies and public feature weights.
+Metrics requiring a missing scale map, ROI, or TU/mask remain missing (NaN). LPIPS is explicitly enabled with `--lpips` and requires the additional perceptual-evaluation dependencies and public feature weights.
 
 <a id="paper-metric-equations"></a>
 
@@ -745,13 +745,13 @@ TU statistics separate ROI and background according to whether each block center
 \end{gathered}
 ```
 
-These are mean side lengths by TU count, without area weighting. Missing TU / mask inputs produce NaN. If annotations are supplied but a class is empty, the code sets that class mean to 0; a zero ROI mean yields a ratio of Inf.
+These are mean side lengths by TU count, without area weighting. Missing TU/mask inputs produce NaN. If annotations are supplied but a class is empty, the code sets that class mean to 0; a zero ROI mean yields a ratio of Inf.
 
 Implementation: [evaluation entry point](evaluation/runner.py), [MATLAB batch metrics](evaluation/evaluate_batch.m).
 
 ## Running and Reproducing Experiments
 
-Prepare images with `beamform` (optional), `prepare`, `prior`, and `denoise` in sequence. Run `train` to obtain weights, then `infer`, and finally `evaluate` to summarize results. Compatible existing weights allow direct inference. `fixed` and the network variants provide separate comparisons. Input manifests, annotations, and data splits must be prepared in advance.
+Prepare images with `beamform` (optional), `prepare`, `prior`, and `denoise` in sequence. Run `train` to obtain weights, then `infer`, and finally `evaluate` to summarize results. Compatible existing weights allow direct inference. The `fixed` command and the network variants provide separate comparisons. Input manifests, annotations, and data splits must be prepared in advance.
 
 See the [reproduction guide](docs/reproduction.md) for environment setup, encoder builds, and stage commands; the [data contract](docs/data_contract.md) for input and manifest formats; and the [validation record](docs/validation.md) for completed synthetic checks and the scope of actual testing.
 
