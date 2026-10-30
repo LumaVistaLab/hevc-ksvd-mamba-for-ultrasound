@@ -11,33 +11,33 @@
 ```mermaid
 flowchart TD
     %% 阶段标题放在普通节点中，避免跨子图连线穿过分组标题与边界。
-    RF["RF 通道数据<br/>与采集参数"] --> BF["1. RF 成像（可选）<br/>beamform<br/>延迟求和、包络与扫描转换"]
+    RF["RF 通道数据<br/>与采集参数"] --> BF["<b>1. RF 成像（可选）</b><br/>beamform<br/>延迟求和、包络与扫描转换"]
     BF --> BM["32 线／128 线 B 模式图像"]
     Existing["已有 B 模式图像"] --> BM
-    BM --> Prep["1. 图像预处理<br/>prepare<br/>灰度校验、裁剪与缩放"]
+    BM --> Prep["<b>1. 图像预处理</b><br/>prepare<br/>灰度校验、裁剪与缩放"]
     Prep --> Low["原始 32 线 TIFF"]
     Prep --> High["原始 128 线 TIFF"]
     Prep --> PGM["同像素 PGM"]
 
-    PGM --> HEVC["2. HEVC 结构先验<br/>prior<br/>对待处理低线数图像编码"]
+    PGM --> HEVC["<b>2. HEVC 结构先验</b><br/>prior<br/>对待处理低线数图像编码"]
     HEVC --> Stream["HEVC 码流"]
     HEVC --> Blocks["TU／PU 分块数组"]
-    Blocks --> Maps["3. 自适应尺度图<br/>TU 插值与 PU 灰度调节<br/>平滑与尺度选择"]
+    Blocks --> Maps["<b>3. 自适应尺度图</b><br/>TU 插值与 PU 灰度调节<br/>平滑与尺度选择"]
     Low --> Maps
-    Maps --> KSVD["3. Block K-SVD 去噪<br/>denoise<br/>字典学习、稀疏编码与加权重建"]
+    Maps --> KSVD["<b>3. Block K-SVD 去噪</b><br/>denoise<br/>字典学习、稀疏编码与加权重建"]
     Low --> KSVD
     KSVD --> Denoised["去噪 TIFF<br/>连续／离散尺度图与耗时"]
 
     Low -->|train / val| Pairs["pairs.csv<br/>按来源划分的原始配对图像"]
     High -->|train / val| Pairs
-    Pairs --> Train["4. USR-Mamba 训练<br/>train<br/>训练集增强、对抗训练与验证"]
+    Pairs --> Train["<b>4. USR-Mamba 训练</b><br/>train<br/>训练集增强、对抗训练与验证"]
     Train --> Weights["USR-Mamba 权重<br/>参数与损失记录"]
-    Denoised -->|cascade 测试图像| Infer["5. 低线数图像增强<br/>infer<br/>加载权重并增强 32 线图像"]
+    Denoised -->|cascade 测试图像| Infer["<b>5. 低线数图像增强</b><br/>infer<br/>加载权重并增强 32 线图像"]
     Weights --> Infer
     Infer --> Enhanced["增强 TIFF<br/>保持输入尺寸与相对目录"]
 
-    Low -.-> Fixed["3. 固定块对照<br/>fixed<br/>各固定尺度独立重建"]
-    Fixed -.-> Eval["6. 定量评价<br/>evaluate<br/>依据 evaluation.csv 计算指标"]
+    Low -.-> Fixed["<b>3. 固定块对照</b><br/>fixed<br/>各固定尺度独立重建"]
+    Fixed -.-> Eval["<b>6. 定量评价</b><br/>evaluate<br/>依据 evaluation.csv 计算指标"]
     Low -.->|原始图像对照| Eval
     Denoised -.->|去噪对照／连续尺度图| Eval
     Blocks -.->|TU 数组| Eval
