@@ -149,8 +149,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 1484,
-      "sha256": "11453566eda35dc0a40d853fb2e6e51fc00ef015cf5f7b20887f1979ec752f3d"
+      "bytes": 16351,
+      "sha256": "c4b076683e0f7fdc070301584ec518c8380ec5fcfeb5ec912c0e51f029daa572"
     },
     {
       "path": "requirements-perceptual.txt",
