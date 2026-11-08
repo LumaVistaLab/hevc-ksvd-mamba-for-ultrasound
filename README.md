@@ -379,7 +379,7 @@ R_t\approx U\Sigma V^{\mathrm{T}}
 \left\{\begin{gathered}
 d_t\leftarrow U(:,1)\\
 A(t,\mathcal{I}_t)\leftarrow\Sigma(1,1)V(:,1)^{\mathrm{T}}
-\end{gathered}\right\}
+\end{gathered}\right.
 \qquad\text{(3-6)}
 ```
 

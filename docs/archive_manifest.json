@@ -149,13 +149,13 @@
     },
     {
       "path": "README.md",
-      "bytes": 53106,
-      "sha256": "f2a1c616b966b4fa653edc4371f6877312ed198b5285d7649262ebc479278688"
+      "bytes": 53105,
+      "sha256": "b9ed84f3cc3c3197105890b20759e60f5872cfd05561c643646fd309c48d26e5"
     },
     {
       "path": "README_zh-CN.md",
-      "bytes": 46329,
-      "sha256": "a48aa8b2de70c2c1ec53262e08bf6c174cd4af37b7de09bf58009e4bc1036664"
+      "bytes": 46328,
+      "sha256": "2a106973c3b35a9c81b24786bb6a63981a72197970d3c447bcdade4306886477"
     },
     {
       "path": "requirements-perceptual.txt",
